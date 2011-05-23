@@ -22,7 +22,7 @@ Credits
 -------
 
 * Krzysztof Kowalczyk - port of upskirt to go
-* Natacha Porté - original author of upskirt
+* Natacha PortÃ© - original author of upskirt
 * Vicent Marti - upskirt fork on which go-markdown is based
 * other people who contributed to upskirt
 
