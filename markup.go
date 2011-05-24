@@ -6,13 +6,13 @@ import (
 
 const (
 	xhtmlClose = "/>\n"
-	htmlClose = ">\n"
+	htmlClose  = ">\n"
 )
 
 const (
-	MKDA_NOT_AUTOLINK = iota	/* used internally when it is not an autolink*/
-	MKDA_NORMAL					/* normal http/http/ftp/mailto/etc link */
-	MKDA_EMAIL					/* e-mail link without explit mailto: */
+	MKDA_NOT_AUTOLINK = iota /* used internally when it is not an autolink*/
+	MKDA_NORMAL              /* normal http/http/ftp/mailto/etc link */
+	MKDA_EMAIL               /* e-mail link without explit mailto: */
 )
 
 const (
@@ -27,44 +27,43 @@ const (
 	MD_CHAR_AUTOLINK
 )
 
-type MarkdownOptions struct  {
-	Xhtml bool
-	SkipImages bool
-	SkipLinks bool
-	SkipHtml bool
+type MarkdownOptions struct {
+	Xhtml           bool
+	SkipImages      bool
+	SkipLinks       bool
+	SkipHtml        bool
 	GitHubBlockCode bool
 
-/* bools below map:
-enum mkd_extensions {
-	MKDEXT_NO_INTRA_EMPHASIS = (1 << 0),
-	MKDEXT_TABLES = (1 << 1),
-	MKDEXT_FENCED_CODE = (1 << 2),
-	MKDEXT_AUTOLINK = (1 << 3),
-	MKDEXT_STRIKETHROUGH = (1 << 4),
-	MKDEXT_LAX_HTML_BLOCKS = (1 << 5),
-	MKDEXT_SPACE_HEADERS = (1 << 6),
-};*/
+	/* bools below map:
+	enum mkd_extensions {
+		MKDEXT_NO_INTRA_EMPHASIS = (1 << 0),
+		MKDEXT_TABLES = (1 << 1),
+		MKDEXT_FENCED_CODE = (1 << 2),
+		MKDEXT_AUTOLINK = (1 << 3),
+		MKDEXT_STRIKETHROUGH = (1 << 4),
+		MKDEXT_LAX_HTML_BLOCKS = (1 << 5),
+		MKDEXT_SPACE_HEADERS = (1 << 6),
+	};*/
 	ExtNoIntraEmphasis bool
-	ExtTables bool
-	ExtFencedCode bool
-	ExtAutoLink bool
-	ExtStrikeThrough bool
-	ExtLaxHtmlBlocks bool
-	ExtSpaceHeaders bool
+	ExtTables          bool
+	ExtFencedCode      bool
+	ExtAutoLink        bool
+	ExtStrikeThrough   bool
+	ExtLaxHtmlBlocks   bool
+	ExtSpaceHeaders    bool
 }
 
 type LinkRef struct {
-	// make them all []byte ?
-	Id string
-	Link string
-	Title string
+	id    []byte
+	link  []byte
+	title []byte
 }
 
 type HtmlRenderer struct {
-	out bytes.Buffer 
-	options *MarkdownOptions
-	closeTag string
-	refs []LinkRef
+	out        bytes.Buffer
+	options    *MarkdownOptions
+	closeTag   string
+	refs       []*LinkRef
 	activeChar [256]byte
 	maxNesting int
 }
@@ -87,40 +86,43 @@ func newHtmlRenderer(options *MarkdownOptions) *HtmlRenderer {
 	r.activeChar['\n'] = MD_CHAR_LINEBREAK
 	r.activeChar['['] = MD_CHAR_LINK
 
-	r.activeChar['<'] = MD_CHAR_LANGLE;
-	r.activeChar['\\'] = MD_CHAR_ESCAPE;
-	r.activeChar['&'] = MD_CHAR_ENTITITY;
+	r.activeChar['<'] = MD_CHAR_LANGLE
+	r.activeChar['\\'] = MD_CHAR_ESCAPE
+	r.activeChar['&'] = MD_CHAR_ENTITITY
 
 	if options.ExtAutoLink {
-		r.activeChar['h'] = MD_CHAR_AUTOLINK; // http, https
-		r.activeChar['H'] = MD_CHAR_AUTOLINK;
+		r.activeChar['h'] = MD_CHAR_AUTOLINK // http, https
+		r.activeChar['H'] = MD_CHAR_AUTOLINK
 
-		r.activeChar['f'] = MD_CHAR_AUTOLINK; // ftp
-		r.activeChar['F'] = MD_CHAR_AUTOLINK;
+		r.activeChar['f'] = MD_CHAR_AUTOLINK // ftp
+		r.activeChar['F'] = MD_CHAR_AUTOLINK
 
-		r.activeChar['m'] = MD_CHAR_AUTOLINK; // mailto
-		r.activeChar['M'] = MD_CHAR_AUTOLINK;		
+		r.activeChar['m'] = MD_CHAR_AUTOLINK // mailto
+		r.activeChar['M'] = MD_CHAR_AUTOLINK
 	}
+	r.refs = make([]*LinkRef, 16)
 	r.maxNesting = 16
 	return r
 }
 
 func (d *HtmlRenderer) renderBlockCode(text, lang string) {
-	
+
 }
 
 // Returns whether a line is a reference or not
-// TODO: return slice of LinkRef
-func isRef(data []byte, beg, end int) (ref bool, last int) {
+func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	ref = false
 	last = 0 // doesn't matter unless ref is true
+
 	i := 0
-	if beg + 3 >= end {
+	if beg+3 >= end {
 		return
 	}
 	if data[beg] == ' ' {
-		i = 1; if data[beg+1] == ' ' {
-			i = 2; if data[beg+2] == ' ' {
+		i = 1
+		if data[beg+1] == ' ' {
+			i = 2
+			if data[beg+2] == ' ' {
 				i = 3
 				if data[beg+3] == ' ' {
 					return
@@ -149,14 +151,14 @@ func isRef(data []byte, beg, end int) (ref bool, last int) {
 	if i >= end || data[i] != ':' {
 		return
 	}
-	i += 1;
+	i += 1
 	for i < end && (data[i] == ' ' || data[i] == '\t') {
-		i += 1;
+		i += 1
 	}
 	if i < end && (data[i] == '\n' || data[i] == '\r') {
-		i += 1;
-		if i < end && data[i] == '\r' && data[i - 1] == '\n' {
-			i += 1	
+		i += 1
+		if i < end && data[i] == '\r' && data[i-1] == '\n' {
+			i += 1
 		}
 	}
 	for i < end && (data[i] == ' ' || data[i] == '\t') {
@@ -173,30 +175,142 @@ func isRef(data []byte, beg, end int) (ref bool, last int) {
 
 	link_offset := i
 	for i < end && data[i] != ' ' && data[i] != '\t' && data[i] != '\n' && data[i] != '\r' {
- 		i += 1				
+		i += 1
 	}
 
 	link_end := i
-	if data[i - 1] == '>' {
-		link_end = i - 1	
+	if data[i-1] == '>' {
+		link_end = i - 1
 	}
 
 	/* optional spacer: (space | tab)* (newline | '\'' | '"' | '(' ) */
-	// TODO: and write the rest
+	for i < end && (data[i] == ' ' || data[i] == '\t') {
+		i += 1
+	}
+
+	if i < end && data[i] != '\n' && data[i] != '\r' && data[i] != '\'' && data[i] != '"' && data[i] != '(' {
+		return
+	}
+	line_end := 0
+	/* computing end-of-line */
+	if i >= end || data[i] == '\r' || data[i] == '\n' {
+		line_end = i
+	}
+	if i + 1 < end && data[i] == '\n' && data[i + 1] == '\r' {
+		line_end = i + 1
+	}
+
+	/* optional (space|tab)* spacer after a newline */
+	if line_end > 0 {
+		i = line_end + 1
+		for i < end && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+	}
+
+	/* optional title: any non-newline sequence enclosed in '"()
+					alone on its line */
+	title_offset := 0
+	title_end := 0
+	if i + 1 < end && (data[i] == '\'' || data[i] == '"' || data[i] == '(') {
+		i += 1
+		title_offset = i
+		/* looking for EOL */
+		for i < end && data[i] != '\n' && data[i] != '\r' {
+			i += 1
+		}
+		if i + 1 < end && data[i] == '\n' && data[i + 1] == '\r' {
+			title_end = i + 1
+		} else {
+			title_end = i
+		}
+		/* stepping back */
+		i -= 1
+		for i > title_offset && (data[i] == ' ' || data[i] == '\t') {
+			i -= 1
+		}
+		if i > title_offset && (data[i] == '\'' || data[i] == '"' || data[i] == ')') {
+			line_end = title_end
+			title_end = i
+		}
+	}
+	if line_end == 0{
+		return /* garbage after the link */
+	}
+
+	/* a valid ref has been found, filling-in return structures */
+	last = line_end;
+
+	lr = new(LinkRef)
+	lr.id = data[id_offset:id_end]
+	lr.link = data[link_offset:link_end]
+	if title_end > title_offset {
+		lr.title = data[title_offset:title_end]
+	}
 	return
 }
 
-// TODO: a big change would be to use slices rather than pass indexes
+func expand_tabs(ob *bytes.Buffer, line []byte) {
+	tab := 0
+	i := 0
+	size := len(line)
+	for i < size {
+		org := i
+		for i < size && line[i] != '\t' {
+			i++; tab++
+		}
+		if i > org {
+			ob.Write(line[org:i])
+		}
+		if i >= size {
+			break
+		}
+		for {
+			ob.WriteByte('c')
+			tab++
+			if tab % 4 == 0 {
+				break
+			}
+		}
+		i++
+	}
+}
+
+// TODO: a big change would be to use slices more directly rather than pass indexes
 func MarkdownToHtml(s string, options *MarkdownOptions) string {
-	var i, end int
+	//var i int
 	renderer := newHtmlRenderer(options)
 	ib := []byte(s)
+	text := new(bytes.Buffer)
+
 	/* first pass: looking for references, copying everything else */
 	beg := 0
 	for beg < len(ib) {
-		// TODO: also gather slice of LinkRef
-		if ref, last := isRef(ib, beg, len(ib)); ref {
-			
+		if isRef, last, ref := isRef(ib, beg, len(ib)); isRef {
+			beg = last
+			if nil != ref {
+				renderer.refs = append(renderer.refs, ref)
+			}
+		} else { /* skipping to the next line */
+			end := beg
+			for end < len(ib) && ib[end] != '\n' && ib[end] != '\r' {
+				end += 1
+			}
+
+			/* adding the line body if present */
+			if end > beg {
+				expand_tabs(text, ib[beg:end])
+			}
+
+			for end < len(ib) && (ib[end] == '\n' || ib[end] == '\r') {
+				/* add one \n per newline */
+				if ib[end] == '\n' || (end + 1 < len(ib) && ib[end + 1] != '\n') {
+					text.WriteByte('\n')
+				}
+				end += 1
+			}
+
+			beg = end
 		}
 	}
 	return s

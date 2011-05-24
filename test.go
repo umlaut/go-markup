@@ -29,7 +29,7 @@ func testFile(basename string) {
 	}
 	totalTested++
 	s := string(srcdata)
-	html := markup.MarkdownToHtml(s)
+	html := markup.MarkdownToHtml(s, nil)
 	htmlrefstr := string(refdata)
 	if html != htmlrefstr {
 		fmt.Printf("Fail: '%s'\n", basename)
