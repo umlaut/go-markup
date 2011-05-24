@@ -13,7 +13,7 @@ Testing
 (https://github.com/jgm/peg-markdown/tree/master/MarkdownTest_1.0.3/Tests)
 
 I've used upskirt to generate corresponding _upskirt_ref.html files
-(withuot using any extensions).
+(without using any extensions).
 
 I test go-markup by converting .text files to html and comparing them
 with _upskirt_ref.html files.
