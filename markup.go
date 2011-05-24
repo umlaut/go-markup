@@ -316,6 +316,38 @@ func is_empty(data []byte) int {
 	return i+1
 }
 
+/* returns whether a line is a horizontal rule */
+func is_rule(data []byte) bool {
+	size := len(data)
+	if size < 3 {
+		return false
+	}
+	i := 0
+	/* skipping initial spaces */
+	for i < 3 && data[i] == ' ' {
+		i++
+	}
+
+	/* looking at the hrule char */
+	if i + 2 >= size || (data[i] != '*' && data[i] != '-' && data[i] != '_') {
+		return false
+	}
+	c := data[i]
+
+	/* the whole line must be the char or whitespace */
+	n := 0
+	for i < size && data[i] != '\n' {
+		if data[i] == c {
+			n += 1
+		} else if data[i] != ' ' && data[i] != '\t' {
+			return false
+		}
+		i += 1
+	}
+
+	return n >= 3;
+}
+
 func parse_block(rndr *HtmlRenderer, data []byte) {
 	beg := 0
 
