@@ -18,6 +18,13 @@ I've used upskirt to generate corresponding _upskirt_ref.html files
 I test go-markup by converting .text files to html and comparing them
 with _upskirt_ref.html files.
 
+Todo
+----
+
+First, have to finish the port.
+
+Second, would be nice to add textile support.
+
 Credits
 -------
 
