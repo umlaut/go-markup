@@ -15,8 +15,8 @@ var totalTested int
 var failed int
 
 func testFile(basename string) {
-	src := filepath.Join(testFilesDir, basename + ".text")
-	htmlref :=  filepath.Join(testFilesDir,  basename + "_upskirt_ref.html")
+	src := filepath.Join(testFilesDir, basename+".text")
+	htmlref := filepath.Join(testFilesDir, basename+"_upskirt_ref.html")
 	srcdata, err := ioutil.ReadFile(src)
 	if err != nil {
 		fmt.Printf("Couldn't open '%s', error: %v\n", src, err)
@@ -35,7 +35,7 @@ func testFile(basename string) {
 		fmt.Printf("Fail: '%s'\n", basename)
 		failed++
 	} else {
-		fmt.Printf("Ok: '%s'\n", basename)		
+		fmt.Printf("Ok: '%s'\n", basename)
 	}
 }
 

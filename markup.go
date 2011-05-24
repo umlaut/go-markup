@@ -196,7 +196,7 @@ func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	if i >= end || data[i] == '\r' || data[i] == '\n' {
 		line_end = i
 	}
-	if i + 1 < end && data[i] == '\n' && data[i + 1] == '\r' {
+	if i+1 < end && data[i] == '\n' && data[i+1] == '\r' {
 		line_end = i + 1
 	}
 
@@ -209,17 +209,17 @@ func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	}
 
 	/* optional title: any non-newline sequence enclosed in '"()
-					alone on its line */
+	alone on its line */
 	title_offset := 0
 	title_end := 0
-	if i + 1 < end && (data[i] == '\'' || data[i] == '"' || data[i] == '(') {
+	if i+1 < end && (data[i] == '\'' || data[i] == '"' || data[i] == '(') {
 		i += 1
 		title_offset = i
 		/* looking for EOL */
 		for i < end && data[i] != '\n' && data[i] != '\r' {
 			i += 1
 		}
-		if i + 1 < end && data[i] == '\n' && data[i + 1] == '\r' {
+		if i+1 < end && data[i] == '\n' && data[i+1] == '\r' {
 			title_end = i + 1
 		} else {
 			title_end = i
@@ -234,12 +234,12 @@ func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 			title_end = i
 		}
 	}
-	if line_end == 0{
+	if line_end == 0 {
 		return /* garbage after the link */
 	}
 
 	/* a valid ref has been found, filling-in return structures */
-	last = line_end;
+	last = line_end
 
 	lr = new(LinkRef)
 	lr.id = data[id_offset:id_end]
@@ -257,7 +257,8 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 	for i < size {
 		org := i
 		for i < size && line[i] != '\t' {
-			i++; tab++
+			i++
+			tab++
 		}
 		if i > org {
 			ob.Write(line[org:i])
@@ -268,7 +269,7 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 		for {
 			ob.WriteByte('c')
 			tab++
-			if tab % 4 == 0 {
+			if tab%4 == 0 {
 				break
 			}
 		}
@@ -304,7 +305,7 @@ func MarkdownToHtml(s string, options *MarkdownOptions) string {
 
 			for end < len(ib) && (ib[end] == '\n' || ib[end] == '\r') {
 				/* add one \n per newline */
-				if ib[end] == '\n' || (end + 1 < len(ib) && ib[end + 1] != '\n') {
+				if ib[end] == '\n' || (end+1 < len(ib) && ib[end+1] != '\n') {
 					text.WriteByte('\n')
 				}
 				end += 1
