@@ -109,6 +109,10 @@ func (d *HtmlRenderer) renderBlockCode(text, lang string) {
 
 }
 
+func (d *HtmlRenderer) renderDocHeader() {
+	// do nothing
+}
+
 // Returns whether a line is a reference or not
 func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	ref = false
@@ -277,6 +281,68 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 	}
 }
 
+func is_atxheader(rndr *HtmlRenderer, data []byte) bool {
+	if data[0] != '#' {
+		return false
+	}
+
+	if (rndr.options.ExtSpaceHeaders) {
+		level := 0
+		size := len(data)
+		for level < size && level < 6 && data[level] == '#' {
+			level++
+		}
+
+		if level < size && data[level] != ' ' && data[level] != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+func parse_atxheader(rndr *HtmlRenderer, data []byte) int {
+	// TODO: implement me
+	return 0
+}
+
+func is_empty(data []byte) int {
+	var i int
+	size := len(data)
+	for i = 0; i < size && data[i] != '\n'; i++ {
+		if data[i] != ' ' && data[i] != '\t' {
+			return 0
+		}
+	}
+	return i+1
+}
+
+func parse_block(rndr *HtmlRenderer, data []byte) {
+	beg := 0
+
+	/*
+	if (rndr->work_bufs[BUFFER_SPAN].size +
+		rndr->work_bufs[BUFFER_BLOCK].size > (int)rndr->max_nesting)
+		return;
+	*/
+	size := len(data)
+
+	for beg < size {
+		txt_data := data[beg:]
+		//end := len(txt_data)
+		if is_atxheader(rndr, txt_data) {
+			beg += parse_atxheader(rndr, txt_data)
+		}
+		/* 		else if (data[beg] == '<' && rndr->make.blockhtml &&
+				(i = parse_htmlblock(ob, rndr, txt_data, end, 1)) != 0)
+			beg += i; */
+		if i := is_empty(txt_data); i != 0 {
+			beg += i
+		}
+
+		beg++
+	}
+}
+
 // TODO: a big change would be to use slices more directly rather than pass indexes
 func MarkdownToHtml(s string, options *MarkdownOptions) string {
 	//var i int
@@ -314,5 +380,22 @@ func MarkdownToHtml(s string, options *MarkdownOptions) string {
 			beg = end
 		}
 	}
+
+	/* sorting the reference array */
+	// TODO: sort renderer.refs
+
+	/* second pass: actual rendering */
+	renderer.renderDocHeader()
+
+	if (text.Len() > 0) {
+		/* adding a final newline if not already present */
+		data := text.Bytes()
+		if (data[len(data) - 1] != '\n' &&  data[len(data) - 1] != '\r') {
+			text.WriteByte('\n')
+		}
+
+		parse_block(renderer, text.Bytes());
+	}
+
 	return s
 }
