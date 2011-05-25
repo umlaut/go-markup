@@ -107,10 +107,14 @@ func spaces(n int) string {
 	return string(r)
 }
 
-func trace(s string) string {
+func trace(s string, args ...string) string {
 	sp := spaces(funcNestLevel * 2)
 	funcNestLevel++
-	fmt.Printf("%s%s()\n", sp, s)
+	if len(args) > 0 {
+		fmt.Printf("%s%s(%s)\n", sp, s, args[0])
+	} else {
+		fmt.Printf("%s%s()\n", sp, s)
+	}
 	return s
 }
 
@@ -351,17 +355,13 @@ func isspace(c byte) bool {
 
 // rndr_paragraph
 func (rndr *HtmlRenderer) paragraph(ob *bytes.Buffer, text []byte) {
-	defer un(trace("paragraph"))
+	defer un(trace("paragraph", string(text)))
 	//struct html_renderopt *options = opaque;
 	i := 0
 	size := len(text)
 
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
-	}
-
-	if 0 == size {
-		return
 	}
 
 	for i < size && isspace(text[i]) {
@@ -1103,5 +1103,5 @@ func MarkdownToHtml(s string, options *MarkdownOptions) string {
 		parse_block(ob, rndr, text.Bytes())
 	}
 
-	return s
+	return string(ob.Bytes())
 }
