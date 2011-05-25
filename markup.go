@@ -3,6 +3,7 @@ package markup
 import (
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -28,11 +29,17 @@ const (
 	MD_CHAR_AUTOLINK
 )
 
-
 // bufType in newBuf() and popBuf()
 const (
 	BUFFER_BLOCK = iota
 	BUFFER_SPAN
+)
+
+var block_tags []string = []string{ "p", "dl", "h1", "h2", "h3", "h4", "h5", "h6", "ol", "ul", "del", "div", "ins", "pre", "form", "math", "table", "iframe", "script", "fieldset", "noscript", "blockquote" }
+
+const (
+	INS_TAG = "ins"
+	DEL_TAG = "del"
 )
 
 type MarkdownOptions struct {
@@ -156,6 +163,30 @@ func (rndr *HtmlRenderer) blockquote(ob *bytes.Buffer, text *bytes.Buffer) {
 		ob.Write(text.Bytes())
 	}
 	ob.WriteString("</blockquote>\n")*/
+}
+
+// this is rndr_raw_block
+func (rndr *HtmlRenderer) blockhtml(ob *bytes.Buffer, text *bytes.Buffer) {
+	if nil == text {
+		return
+	}
+	data := text.Bytes()
+	sz := len(data)
+	for sz > 0 && data[sz - 1] == '\n' {
+		sz -= 1
+	}
+	org := 0;
+	for org < sz && data[org] == '\n' {
+		org += 1
+	}
+	if org >= sz {
+		return
+	}
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
+	ob.Write(data[org:])
+	ob.WriteByte('\n')
 }
 
 func (rndr *HtmlRenderer) blockcode(text, lang string) {
@@ -466,6 +497,13 @@ func prefix_quote(data []byte) int {
 	return 0;
 }
 
+// checking end of HTML block : </tag>[ \t]*\n[ \t*]\n
+//	returns the length on match, 0 otherwise
+func htmlblock_end(tag string, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
 /* handles parsing of a blockquote fragment */
 func parse_blockquote(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	size := len(data)
@@ -497,6 +535,146 @@ func parse_blockquote(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	return end
 }
 
+func isalnum(c byte) bool {
+	if c >= '0' && c <= '9' {
+		return true
+	}
+	if c >= 'A' && c <= 'Z' {
+		return true
+	}
+
+	return c >= 'a' && c <= 'z'
+}
+
+/* returns the current block tag */
+func find_block_tag(data []byte) string {
+	i := 0
+	size := len(data)
+
+	/* looking for the word end */
+	for i < size && isalnum(data[i]) {
+		i++
+	}
+	if i == 0 || i >= size {
+		return ""
+	}
+	s := strings.ToLower(string(data[:i]))
+	for _, tag := range block_tags {
+		if s == tag {
+			return s
+		}
+	}
+	return ""
+}
+
+/* parsing of inline HTML block */
+func parse_htmlblock(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, do_render bool) int {
+	i := 0
+	j := 0
+	curtag := ""
+	size := len(data)
+
+	/* identification of the opening tag */
+	if size < 2 || data[0] != '<' {
+		return 0
+	}
+	curtag = find_block_tag(data[1:])
+
+	/* handling of special cases */
+	if 0 == len(curtag) {
+
+		/* HTML comment, laxist form */
+		if size > 5 && data[1] == '!' && data[2] == '-' && data[3] == '-' {
+			i = 5
+
+			for i < size && !(data[i - 2] == '-' && data[i - 1] == '-' && data[i] == '>') {
+				i++
+			}
+
+			i++
+
+			if i < size {
+				j = is_empty(data[i:])
+			}
+
+			if j > 0 {
+				work_size := i + j
+				if do_render {
+					work := bytes.NewBuffer(data[:work_size])
+					rndr.blockhtml(ob, work)
+				}
+				return work_size
+			} 
+		}
+
+		/* HR, which is the only self-closing block tag considered */
+		if size > 4 && (data[1] == 'h' || data[1] == 'H') && (data[2] == 'r' || data[2] == 'R') {
+			i = 3
+			for i < size && data[i] != '>' {
+				i += 1
+			}
+
+			if i + 1 < size {
+				i += 1
+				j = is_empty(data[i:])
+				if j > 0 {
+					work_size := i + j
+					if do_render {
+						work := bytes.NewBuffer(data[:work_size])
+						rndr.blockhtml(ob, work)
+					}
+					return work_size
+				}
+			} 
+		}
+
+		/* no special case recognised */
+		return 0
+	}
+
+	/* looking for an unindented matching closing tag */
+	/*	followed by a blank line */
+	i = 1
+	found := false
+
+	/* if not found, trying a second pass looking for indented match */
+	/* but not if tag is "ins" or "del" (following original Markdown.pl) */
+	if curtag != INS_TAG && curtag != DEL_TAG {
+		i = 1
+		for i < size {
+			i++
+			for i < size && !(data[i - 1] == '<' && data[i] == '/') {
+				i++
+			}
+
+			if i + 2 + len(curtag) >= size {
+				break
+			}
+
+			j = htmlblock_end(curtag, rndr, data[i - 1:])
+
+			if j > 0 {
+				i += j - 1
+				found = true
+				break
+			}
+		} 
+	}
+
+	if !found {
+		return 0
+	}
+
+	/* the end of the block has been found */
+	work_size := i
+	if do_render {
+		work := bytes.NewBuffer(data[:work_size])
+		rndr.blockhtml(ob, work)
+	}
+
+	return i
+}
+
 /* handles parsing of a regular paragraph */
 func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	//struct buf work = { data, 0, 0, 0, 0 }; /* volatile working buffer */
@@ -518,7 +696,7 @@ func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 		}
 
 		if (rndr.options.ExtLaxHtmlBlocks) {
-			if data[i] == '<' && parse_htmlblock(ob, rndr, data[i:], 0) {
+			if data[i] == '<' && parse_htmlblock(ob, rndr, data[i:], false) > 0 {
 				end = i
 				break
 			}
