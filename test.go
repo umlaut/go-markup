@@ -34,6 +34,8 @@ func testFile(basename string) {
 	if html != htmlrefstr {
 		fmt.Printf("Fail: '%s'\n", basename)
 		failed++
+		fmt.Printf("Got:\n%s\n", html)
+		fmt.Printf("Expected:\n%s\n", htmlrefstr)
 	} else {
 		fmt.Printf("Ok: '%s'\n", basename)
 	}

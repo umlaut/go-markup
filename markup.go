@@ -2,6 +2,7 @@ package markup
 
 import (
 	"bytes"
+	"fmt"
 )
 
 const (
@@ -25,6 +26,13 @@ const (
 	MD_CHAR_ESCAPE
 	MD_CHAR_ENTITITY
 	MD_CHAR_AUTOLINK
+)
+
+
+// bufType in newBuf() and popBuf()
+const (
+	BUFFER_BLOCK = iota
+	BUFFER_SPAN
 )
 
 type MarkdownOptions struct {
@@ -60,11 +68,12 @@ type LinkRef struct {
 }
 
 type HtmlRenderer struct {
-	out        bytes.Buffer
 	options    *MarkdownOptions
 	closeTag   string
 	refs       []*LinkRef
 	activeChar [256]byte
+	blockBufs  []*bytes.Buffer
+	spanBufs   []*bytes.Buffer
 	maxNesting int
 }
 
@@ -105,11 +114,55 @@ func newHtmlRenderer(options *MarkdownOptions) *HtmlRenderer {
 	return r
 }
 
-func (d *HtmlRenderer) renderBlockCode(text, lang string) {
+func (rndr *HtmlRenderer) newBuf(bufType int) (buf *bytes.Buffer) {
+	buf = new(bytes.Buffer)
+	if BUFFER_BLOCK == bufType {
+		rndr.blockBufs = append(rndr.blockBufs, buf)
+	} else {
+		rndr.spanBufs = append(rndr.spanBufs, buf)
+	}
+	return
+}
+
+func (rndr *HtmlRenderer) popBuf(bufType int) {
+	if BUFFER_BLOCK == bufType {
+		rndr.blockBufs = rndr.blockBufs[0:len(rndr.blockBufs)-1]
+	} else {
+		rndr.spanBufs = rndr.spanBufs[0:len(rndr.spanBufs)-1]
+	}
+}
+
+func (rndr *HtmlRenderer) reachedNestingLimit() bool {
+	return len(rndr.blockBufs) + len(rndr.spanBufs) > rndr.maxNesting
+}
+
+// writes '<${tag}>\n${text}</${tag}\n' ot "ob"
+func writeInTag(ob *bytes.Buffer, text *bytes.Buffer, tag string) {
+	ob.WriteString("<")
+	ob.WriteString(tag)
+	ob.WriteString(">\n")
+	if text != nil {
+		ob.Write(text.Bytes())
+	}
+	ob.WriteString("</")
+	ob.WriteString(tag)
+	ob.WriteString(">\n")
+}
+
+func (rndr *HtmlRenderer) blockquote(ob *bytes.Buffer, text *bytes.Buffer) {
+	writeInTag(ob, text, "blockquote")
+/*	ob.WriteString("<blockquote>\n")
+	if text ! nil {
+		ob.Write(text.Bytes())
+	}
+	ob.WriteString("</blockquote>\n")*/
+}
+
+func (rndr *HtmlRenderer) blockcode(text, lang string) {
 
 }
 
-func (d *HtmlRenderer) renderDocHeader() {
+func (rndr *HtmlRenderer) docheader() {
 	// do nothing
 }
 
@@ -300,7 +353,40 @@ func is_atxheader(rndr *HtmlRenderer, data []byte) bool {
 	return true
 }
 
-func parse_atxheader(rndr *HtmlRenderer, data []byte) int {
+/* returns whether the line is a setext-style hdr underline */
+func is_headerline(data []byte) int {
+	i := 0
+	size := len(data)
+
+	/* test of level 1 header */
+	if data[i] == '=' {
+		for i = 1; i < size && data[i] == '='; i++ {
+			// do nothing
+		}
+		for i < size && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+		if i >= size || data[i] == '\n' {
+			return 1
+		}
+		return 0
+	}
+
+	/* test of level 2 header */
+	if data[i] == '-' {
+		for i = 1; i < size && data[i] == '-'; i++ {
+			// do nothing
+		}
+		for i < size && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+		if i >= size || data[i] == '\n' {
+			return 2
+		}
+	}
+	return 0
+}
+func parse_atxheader(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	// TODO: implement me
 	return 0
 }
@@ -317,7 +403,7 @@ func is_empty(data []byte) int {
 }
 
 /* returns whether a line is a horizontal rule */
-func is_rule(data []byte) bool {
+func is_hrule(data []byte) bool {
 	size := len(data)
 	if size < 3 {
 		return false
@@ -348,38 +434,172 @@ func is_rule(data []byte) bool {
 	return n >= 3;
 }
 
-func parse_block(rndr *HtmlRenderer, data []byte) {
+func parse_fencedcode(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+func parse_table(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+func skip_spaces(data []byte, max int) int {
+	n := 0
+	for n < max && n < len(data) && data[n] == ' ' {
+		n++
+	}
+	return n
+}
+
+/* returns blockquote prefix length */
+func prefix_quote(data []byte) int {
+	size := len(data)
+	i := skip_spaces(data, 3)
+	if i < size && data[i] == '>' {
+		if i + 1 < size && (data[i + 1] == ' ' || data[i+1] == '\t') {
+			return i + 2
+		} else {
+			return i + 1
+		}
+	}
+	return 0;
+}
+
+/* handles parsing of a blockquote fragment */
+func parse_blockquote(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	size := len(data)
+	work_data := make([]byte, 0, len(data))
+	beg := 0
+	end := 0
+	for beg < size {
+		for end = beg + 1; end < size && data[end - 1] != '\n'; end++ {
+		}
+
+		pre := prefix_quote(data[beg:end])
+
+		if pre > 0 {
+			beg += pre /* skipping prefix */
+		} else if is_empty(data[beg:end]) > 0 && (end >= size || (prefix_quote(data[end:]) == 0 && is_empty(data[end:]) == 0)) {
+			/* empty line followed by non-quote line */
+			break
+		}
+		if beg < end { // copy into the in-place working buffer
+			work_data = append(work_data, data[beg:end]...)
+		}
+		beg = end;
+	}
+
+	out := rndr.newBuf(BUFFER_BLOCK)
+	parse_block(out, rndr, work_data);
+	rndr.blockquote(ob, out);
+	rndr.popBuf(BUFFER_BLOCK)
+	return end
+}
+
+/* handles parsing of a regular paragraph */
+func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	//struct buf work = { data, 0, 0, 0, 0 }; /* volatile working buffer */
+	i := 0
+	end := 0
+	size := len(data)
+
+	for i < size {
+		for end = i + 1; end < size && data[end - 1] != '\n'; end++ {
+			/* empty */
+		}
+
+		if is_empty(data[i:]) > 0 {
+			break
+		}
+		level := is_headerline(data[i:])
+		if level != 0 {
+			break
+		}
+
+		if (rndr.options.ExtLaxHtmlBlocks) {
+			if data[i] == '<' && parse_htmlblock(ob, rndr, data[i:], 0) {
+				end = i
+				break
+			}
+		}
+
+		if is_atxheader(rndr, data[i:]) || is_hrule(data[i:]) {
+			end = i
+			break
+		}
+
+		i = end;
+	}
+
+	return end
+}
+
+func parse_block(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) {
+	fmt.Printf("parse_block:\n%s\n", string(data))
 	beg := 0
 
-	/*
-	if (rndr->work_bufs[BUFFER_SPAN].size +
-		rndr->work_bufs[BUFFER_BLOCK].size > (int)rndr->max_nesting)
-		return;
-	*/
+	if rndr.reachedNestingLimit() {
+		return
+	}
+
 	size := len(data)
 
 	for beg < size {
 		txt_data := data[beg:]
 		//end := len(txt_data)
 		if is_atxheader(rndr, txt_data) {
-			beg += parse_atxheader(rndr, txt_data)
+			beg += parse_atxheader(ob, rndr, txt_data)
+			continue
 		}
-		/* 		else if (data[beg] == '<' && rndr->make.blockhtml &&
+		/* if (data[beg] == '<' && rndr->make.blockhtml &&
 				(i = parse_htmlblock(ob, rndr, txt_data, end, 1)) != 0)
-			beg += i; */
+			beg += i;
+			continue
+			 */
 		if i := is_empty(txt_data); i != 0 {
 			beg += i
+			continue
 		}
+		if is_hrule(txt_data) {
+			/*
+						if (rndr->make.hrule)
+				rndr->make.hrule(ob, rndr->make.opaque);
 
-		beg++
+			while (beg < size && data[beg] != '\n')
+				beg++;
+
+			beg++
+			*/
+			continue
+		}
+		if rndr.options.ExtFencedCode {
+			i := parse_fencedcode(ob, rndr, txt_data)
+			if i > 0 {
+				beg += i
+				continue
+			}
+		}
+		if rndr.options.ExtTables {
+			i := parse_table(ob, rndr, txt_data)
+			if i > 0 {
+				beg += 1
+				continue
+			}			
+		}
+		if prefix_quote(txt_data) > 0 {
+			beg += parse_blockquote(ob, rndr, txt_data)
+		}
+		beg += parse_paragraph(ob, rndr, txt_data)
 	}
 }
 
 // TODO: a big change would be to use slices more directly rather than pass indexes
 func MarkdownToHtml(s string, options *MarkdownOptions) string {
 	//var i int
-	renderer := newHtmlRenderer(options)
+	rndr := newHtmlRenderer(options)
 	ib := []byte(s)
+	ob := new(bytes.Buffer)
 	text := new(bytes.Buffer)
 
 	/* first pass: looking for references, copying everything else */
@@ -388,7 +608,7 @@ func MarkdownToHtml(s string, options *MarkdownOptions) string {
 		if isRef, last, ref := isRef(ib, beg, len(ib)); isRef {
 			beg = last
 			if nil != ref {
-				renderer.refs = append(renderer.refs, ref)
+				rndr.refs = append(rndr.refs, ref)
 			}
 		} else { /* skipping to the next line */
 			end := beg
@@ -417,7 +637,7 @@ func MarkdownToHtml(s string, options *MarkdownOptions) string {
 	// TODO: sort renderer.refs
 
 	/* second pass: actual rendering */
-	renderer.renderDocHeader()
+	rndr.docheader()
 
 	if (text.Len() > 0) {
 		/* adding a final newline if not already present */
@@ -426,7 +646,7 @@ func MarkdownToHtml(s string, options *MarkdownOptions) string {
 			text.WriteByte('\n')
 		}
 
-		parse_block(renderer, text.Bytes());
+		parse_block(ob, rndr, text.Bytes());
 	}
 
 	return s
