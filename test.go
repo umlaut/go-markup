@@ -14,6 +14,11 @@ const (
 var totalTested int
 var failed int
 
+func testStr(s string) {
+	html := markup.MarkdownToHtml(s, nil)
+	fmt.Printf("Result '%s' => '%s'\n",s, html)
+}
+
 func testFile(basename string) {
 	src := filepath.Join(testFilesDir, basename+".text")
 	htmlref := filepath.Join(testFilesDir, basename+"_upskirt_ref.html")
@@ -41,7 +46,7 @@ func testFile(basename string) {
 	}
 }
 
-func main() {
+func testFiles() {
 	files := []string{"Tidyness"}
 
 	totalTested = 0
@@ -49,5 +54,13 @@ func main() {
 	for _, basename := range files {
 		testFile(basename)
 	}
-	fmt.Printf("Failed %d out of %d tests\n", failed, totalTested)
+	fmt.Printf("Failed %d out of %d tests\n", failed, totalTested)	
+}
+
+func testStrings() {
+	testStr("foo")
+}
+
+func main() {
+	testStrings()
 }

@@ -75,13 +75,13 @@ type LinkRef struct {
 }
 
 type HtmlRenderer struct {
-	options    *MarkdownOptions
-	closeTag   string
-	refs       []*LinkRef
-	activeChar [256]byte
-	blockBufs  []*bytes.Buffer
-	spanBufs   []*bytes.Buffer
-	maxNesting int
+	options      *MarkdownOptions
+	closeTag     string
+	refs         []*LinkRef
+	activeChar   [256]byte
+	blockBufs    []*bytes.Buffer
+	spanBufs     []*bytes.Buffer
+	maxNesting   int
 }
 
 func newHtmlRenderer(options *MarkdownOptions) *HtmlRenderer {
@@ -130,6 +130,50 @@ func (rndr *HtmlRenderer) newBuf(bufType int) (buf *bytes.Buffer) {
 	}
 	return
 }
+
+func char_emphasis(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+func char_linebreak(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0	
+}
+
+func char_codespan(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+func char_escape(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0	
+}
+
+func char_entity(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+func char_langle_tag(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+func char_autolink(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+func char_link(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+	// TODO: write me
+	return 0
+}
+
+type TriggerFunc func(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int
+
+var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, char_emphasis, char_codespan, char_linebreak, char_link, char_langle_tag, char_escape, char_entity, char_autolink}
 
 func (rndr *HtmlRenderer) popBuf(bufType int) {
 	if BUFFER_BLOCK == bufType {
@@ -187,6 +231,51 @@ func (rndr *HtmlRenderer) blockhtml(ob *bytes.Buffer, text *bytes.Buffer) {
 	}
 	ob.Write(data[org:])
 	ob.WriteByte('\n')
+}
+
+func put_scaped_char(ob *bytes.Buffer, c byte) {
+	switch  {
+		case c == '<':
+			ob.WriteString("&lt;")
+		case c == '>':
+			ob.WriteString("&gt;") 
+		case c == '&':
+			ob.WriteString("&amp;")
+		case c == '"':
+			ob.WriteString("&quot;")
+		default:
+			ob.WriteByte(c)
+	}
+}
+
+/* copy the buffer entity-escaping '<', '>', '&' and '"' */
+func attr_escape(ob *bytes.Buffer, src []byte) {
+	size := len(src)
+	i := 0
+	for i < size {
+		/* copying directly unescaped characters */
+		org := i
+		for i < size && src[i] != '<' && src[i] != '>' && src[i] != '&' && src[i] != '"' {
+			i += 1
+		}
+		if i > org {
+			ob.Write(src[org:])
+		}
+
+		/* escaping */
+		if i >= size {
+			break
+		}
+
+		put_scaped_char(ob, src[i])
+		i++
+	}	
+}
+
+func (rndr *HtmlRenderer) normal_text(ob *bytes.Buffer, text *bytes.Buffer) {
+	if text != nil {
+		attr_escape(ob, text.Bytes())
+	}
 }
 
 func (rndr *HtmlRenderer) blockcode(text, lang string) {
@@ -567,6 +656,48 @@ func find_block_tag(data []byte) string {
 	return ""
 }
 
+/* parses inline markdown elements */
+func parse_inline(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) {
+	i := 0
+	end := 0
+	size := len(data)
+
+	if rndr.reachedNestingLimit() {
+		return
+	}
+
+	var action byte = 0
+	for i < size {
+		/* copying inactive chars into the output */
+		for end < size {
+			action = rndr.activeChar[data[end]]
+			if action != 0 {
+				break
+			}
+			end++
+		}
+
+		work_data := data[i:]
+		rndr.normal_text(ob, bytes.NewBuffer(work_data))
+
+		if end >= size {
+			break
+		}
+		i = end
+
+		/* calling the trigger */
+		f := markdown_char_ptrs[action]
+		//end = f(ob, rndr, data + i, i, size - i)
+		end = f(ob, rndr, data[i:])
+		if 0 == end {
+			/* no action from the callback */
+			end = i + 1
+		} else { 
+			i += end
+			end = i
+		} 
+	}
+}
 /* parsing of inline HTML block */
 func parse_htmlblock(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, do_render bool) int {
 	i := 0
@@ -682,6 +813,7 @@ func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	end := 0
 	size := len(data)
 
+	level := 0
 	for i < size {
 		for end = i + 1; end < size && data[end - 1] != '\n'; end++ {
 			/* empty */
@@ -690,7 +822,7 @@ func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 		if is_empty(data[i:]) > 0 {
 			break
 		}
-		level := is_headerline(data[i:])
+		level = is_headerline(data[i:])
 		if level != 0 {
 			break
 		}
@@ -710,6 +842,18 @@ func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 		i = end;
 	}
 
+	work_size := i
+	if work_size > 0 && data[work_size - 1] == '\n' {
+		work_size--
+	}
+
+	if 0 == level {
+		tmp := rndr.newBuf(BUFFER_BLOCK)
+		parse_inline(tmp, rndr, data[:work_size])
+		rndr.popBuf(BUFFER_BLOCK)
+	} else {
+		// TODO: write me
+	}
 	return end
 }
 
