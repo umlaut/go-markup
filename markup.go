@@ -6,29 +6,6 @@ import (
 	"strings"
 )
 
-const (
-	xhtmlClose = "/>\n"
-	htmlClose  = ">\n"
-)
-
-const (
-	MKDA_NOT_AUTOLINK = iota /* used internally when it is not an autolink*/
-	MKDA_NORMAL              /* normal http/http/ftp/mailto/etc link */
-	MKDA_EMAIL               /* e-mail link without explit mailto: */
-)
-
-const (
-	MD_CHAR_NONE = iota
-	MD_CHAR_EMPHASIS
-	MD_CHAR_CODESPAN
-	MD_CHAR_LINEBREAK
-	MD_CHAR_LINK
-	MD_CHAR_LANGLE
-	MD_CHAR_ESCAPE
-	MD_CHAR_ENTITITY
-	MD_CHAR_AUTOLINK
-)
-
 // bufType in newBuf() and popBuf()
 const (
 	BUFFER_BLOCK = iota
@@ -42,68 +19,16 @@ const (
 	DEL_TAG = "del"
 )
 
-type MarkdownOptions struct {
-	/*	HTML_SKIP_HTML = (1 << 0),
-		HTML_SKIP_STYLE = (1 << 1),
-		HTML_SKIP_IMAGES = (1 << 2),
-		HTML_SKIP_LINKS = (1 << 3),
-		HTML_EXPAND_TABS = (1 << 5),
-		HTML_SAFELINK = (1 << 7),
-		HTML_TOC = (1 << 8),
-		HTML_HARD_WRAP = (1 << 9),
-		HTML_GITHUB_BLOCKCODE = (1 << 10),
-		HTML_USE_XHTML = (1 << 11),
-	*/
-	SkipHtml        bool
-	SkipStyle       bool
-	SkipImages      bool
-	SkipLinks       bool
-	ExpandTabs      bool
-	SafeLink        bool
-	HardWrap        bool
-	GitHubBlockCode bool
-	Xhtml           bool
-
-	/* bools below map:
-	enum mkd_extensions {
-		MKDEXT_NO_INTRA_EMPHASIS = (1 << 0),
-		MKDEXT_TABLES = (1 << 1),
-		MKDEXT_FENCED_CODE = (1 << 2),
-		MKDEXT_AUTOLINK = (1 << 3),
-		MKDEXT_STRIKETHROUGH = (1 << 4),
-		MKDEXT_LAX_HTML_BLOCKS = (1 << 5),
-		MKDEXT_SPACE_HEADERS = (1 << 6),
-	};*/
-	ExtNoIntraEmphasis bool
-	ExtTables          bool
-	ExtFencedCode      bool
-	ExtAutoLink        bool
-	ExtStrikeThrough   bool
-	ExtLaxHtmlBlocks   bool
-	ExtSpaceHeaders    bool
-}
-
 type LinkRef struct {
 	id    []byte
 	link  []byte
 	title []byte
 }
 
-type HtmlRenderer struct {
-	options    *MarkdownOptions
-	closeTag   string
-	refs       []*LinkRef
-	activeChar [256]byte
-	blockBufs  []*bytes.Buffer
-	spanBufs   []*bytes.Buffer
-	maxNesting int
-}
-
 var funcNestLevel int = 0
-var spacesBytes []byte = []byte("                                                                   ")
 
 func spaces(n int) string {
-	r := spacesBytes[:n]
+	r := []byte("                                                                   ")[:n]
 	return string(r)
 }
 
@@ -124,60 +49,275 @@ func un(s string) {
 	//fmt.Printf("%s%s()\n", sp, s)
 }
 
-func newHtmlRenderer(options *MarkdownOptions) *HtmlRenderer {
-	defer un(trace("newHtmlRenderer"))
+/***************************
+ * HELPER FUNCTIONS *
+ ***************************/
+func is_safe_link(link []byte) bool {
+	valid_uris := [4]string{"http://", "https://", "ftp://", "mailto://" }
 
-	if options == nil {
-		options = new(MarkdownOptions)
+	for i := 0; i < 4; i++ {
+		uri := []byte(valid_uris[i])
+		if bytes.HasPrefix(link, uri) && isalnum(link[len(uri)]) {
+			return true
+		}
 	}
-	r := &HtmlRenderer{options: options}
-	r.closeTag = htmlClose
-	if options.Xhtml {
-		r.closeTag = xhtmlClose
-	}
-	r.activeChar['*'] = MD_CHAR_EMPHASIS
-	r.activeChar['_'] = MD_CHAR_EMPHASIS
-	if options.ExtStrikeThrough {
-		r.activeChar['~'] = MD_CHAR_EMPHASIS
-	}
-	r.activeChar['`'] = MD_CHAR_CODESPAN
-	r.activeChar['\n'] = MD_CHAR_LINEBREAK
-	r.activeChar['['] = MD_CHAR_LINK
-
-	r.activeChar['<'] = MD_CHAR_LANGLE
-	r.activeChar['\\'] = MD_CHAR_ESCAPE
-	r.activeChar['&'] = MD_CHAR_ENTITITY
-
-	if options.ExtAutoLink {
-		r.activeChar['h'] = MD_CHAR_AUTOLINK // http, https
-		r.activeChar['H'] = MD_CHAR_AUTOLINK
-
-		r.activeChar['f'] = MD_CHAR_AUTOLINK // ftp
-		r.activeChar['F'] = MD_CHAR_AUTOLINK
-
-		r.activeChar['m'] = MD_CHAR_AUTOLINK // mailto
-		r.activeChar['M'] = MD_CHAR_AUTOLINK
-	}
-	r.refs = make([]*LinkRef, 16)
-	r.maxNesting = 16
-	return r
+	return false
 }
 
-func (rndr *HtmlRenderer) newBuf(bufType int) (buf *bytes.Buffer) {
-	defer un(trace("newBuf"))
+/* looks for the next emph char, skipping other constructs */
+func find_emph_char(data []byte, c byte) int {
+	size := len(data)
+	i := 1
 
-	buf = new(bytes.Buffer)
-	if BUFFER_BLOCK == bufType {
-		rndr.blockBufs = append(rndr.blockBufs, buf)
-	} else {
-		rndr.spanBufs = append(rndr.spanBufs, buf)
+	for i < size {
+		for i < size && data[i] != c && data[i] != '`' && data[i] != '[' {
+			i += 1
+		}
+
+		if data[i] == c {
+			return i
+		}
+
+		/* not counting escaped chars */
+		if i > 0 && data[i - 1] == '\\' { // i > 0 probably not necessary
+			i += 1
+			continue
+		}
+
+		/* skipping a code span */
+		if data[i] == '`' {
+			tmp_i := 0
+			i += 1
+			for i < size && data[i] != '`' {
+				if 0 == tmp_i && data[i] == c {
+					tmp_i = i
+				}
+				i += 1
+			}
+			if i >= size {
+				return tmp_i
+			}
+			i += 1
+		} else if (data[i] == '[') {
+			/* skipping a link */
+			tmp_i := 0
+			i += 1
+			for i < size && data[i] != ']' {
+				if 0 == tmp_i && data[i] == c {
+					tmp_i = i
+				}
+				i += 1
+			}
+			i += 1
+			for i < size && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n') {
+				i += 1
+			}
+			if i >= size {
+				return tmp_i
+			}
+			if data[i] != '[' && data[i] != '(' { /* not a link*/
+				if tmp_i > 0 {
+					return tmp_i
+				} else {
+					continue
+				}
+			}
+			cc := data[i]
+			i += 1
+			for i < size && data[i] != cc {
+				if 0 == tmp_i && data[i] == c {
+					tmp_i = i
+				}
+				i += 1
+			}
+			if i >= size {
+				return tmp_i
+			}
+			i += 1
+		}
 	}
-	return
+	return 0
+}
+
+/* parsing single emphase */
+/* closed by a symbol not preceded by whitespace and not followed by symbol */
+func parse_emph1(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int {
+	//TODO:
+	//if (!rndr->make.emphasis) return 0;
+	size := len(data)
+	i := 0
+
+	/* skipping one symbol if coming from emph3 */
+	if size > 1 && data[0] == c && data[1] == c {
+		i = 1
+	}
+
+	for i < size {
+		len := find_emph_char(data[i:], c)
+		if 0 == len {
+			return 0
+		}
+		i += len
+		if i >= size {
+			return 0
+		}
+
+		if i + 1 < size && data[i + 1] == c {
+			i += 1
+			continue
+		}
+
+		if data[i] == c && !isspace(data[i - 1]) {
+			if rndr.options.ExtNoIntraEmphasis {
+				if !(i + 1 == size || isspace(data[i + 1]) || ispunct(data[i + 1])) {
+					continue
+				}
+			}
+
+			work := rndr.newBuf(BUFFER_SPAN)
+			parse_inline(work, rndr, data[:i])
+			r := emphasis(ob, work)
+			rndr.popBuf(BUFFER_SPAN)
+			if r > 0 {
+				return i + 1
+			} else {
+				return 0
+			}
+		}
+	}
+
+	return 0
+}
+
+/* parsing single emphase */
+func parse_emph2(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int {
+	//int (*render_method)(struct buf *ob, struct buf *text, void *opaque);
+	i := 0
+	size := len(data)
+	//render_method = (c == '~') ? rndr->make.strikethrough : rndr->make.double_emphasis;
+	//if (!render_method)
+	//	return 0;
+	
+	for i < size {
+		len := find_emph_char(data[i:], c)
+		if 0 == len {
+			return 0
+		}
+		i += len
+
+		if i + 1 < size && data[i] == c && data[i + 1] == c && i > 0 && !isspace(data[i - 1]) {
+			work := rndr.newBuf(BUFFER_SPAN)
+			parse_inline(work, rndr, data[:i])
+			// TODO: 
+			//r = render_method(ob, work, rndr->make.opaque)
+			r := 0
+			rndr.popBuf(BUFFER_SPAN)
+			if r > 0 {
+				return i + 2
+			} else {
+				return 0
+			}
+		}
+		i++
+	}
+	return 0
+}
+
+/* parsing single emphase */
+/* finds the first closing tag, and delegates to the other emph */
+func parse_emph3(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int {
+	size := len(data)
+	i := 0
+
+	for i < size {
+		len := find_emph_char(data[i:], c)
+		if 0 == len {
+			return 0
+		}
+		i += len
+
+		/* skip whitespace preceded symbols */
+		if data[i] != c || isspace(data[i - 1]) {
+			continue
+		}
+
+		// TODO: only if rndr->make.triple_emphasis
+		if i + 2 < size && data[i + 1] == c && data[i + 2] == c {
+			/* triple symbol found */
+			work := rndr.newBuf(BUFFER_SPAN)
+
+			parse_inline(work, rndr, data[:i])
+			r := triple_emphasis(ob, work)
+			rndr.popBuf(BUFFER_SPAN)
+			if 0 == r {
+				return i + 3
+			} else {
+				return 0
+			}
+		} else if i + 1 < size && data[i + 1] == c {
+			/* double symbol found, handing over to emph1 */
+			//TODO: len = parse_emph1(ob, rndr, data - 2, size + 2, c);
+			if 0 == len {
+				return 0
+			} else {
+				return len - 2
+			}
+		} else {
+			/* single symbol found, handing over to emph2 */
+			//TODO: len = parse_emph2(ob, rndr, data - 1, size + 1, c);
+			if 0 == len {
+				return 0
+			} else {
+				return len - 1
+			}
+		}
+	}
+	return 0
 }
 
 func char_emphasis(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	defer un(trace("char_emphasis"))
-	// TODO: write me
+
+	c := data[0]
+	size := len(data)
+	var ret int
+
+	if size > 2 && data[1] != c {
+		/* whitespace cannot follow an opening emphasis;
+		 * strikethrough only takes two characters '~~' */
+		if c == '~' || isspace(data[1]) {
+			return 0
+		}
+
+		if ret = parse_emph1(ob, rndr, data[1:], c); ret == 0 {
+			return 0
+		}
+
+		return ret + 1
+	}
+
+	if size > 3 && data[1] == c && data[2] != c {
+		if isspace(data[2]) {
+			return 0
+		}
+
+		if ret = parse_emph2(ob, rndr, data[2:], c); ret == 0 {
+			return 0
+		}
+
+		return ret + 2;
+	}
+
+	if size > 4 && data[1] == c && data[2] == c && data[3] != c {
+		if c == '~' || isspace(data[3]) {
+			return 0
+		}
+		if ret = parse_emph3(ob, rndr, data[3:], c); ret == 0 {
+			return 0
+		}
+
+		return ret + 3;
+	}
 	return 0
 }
 
@@ -226,20 +366,6 @@ func char_link(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 type TriggerFunc func(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int
 
 var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, char_emphasis, char_codespan, char_linebreak, char_link, char_langle_tag, char_escape, char_entity, char_autolink}
-
-func (rndr *HtmlRenderer) popBuf(bufType int) {
-	defer un(trace("popBuf"))
-	if BUFFER_BLOCK == bufType {
-		rndr.blockBufs = rndr.blockBufs[0 : len(rndr.blockBufs)-1]
-	} else {
-		rndr.spanBufs = rndr.spanBufs[0 : len(rndr.spanBufs)-1]
-	}
-}
-
-func (rndr *HtmlRenderer) reachedNestingLimit() bool {
-	defer un(trace("reachedNestingLimit"))
-	return len(rndr.blockBufs)+len(rndr.spanBufs) > rndr.maxNesting
-}
 
 // writes '<${tag}>\n${text}</${tag}\n' ot "ob"
 func writeInTag(ob *bytes.Buffer, text *bytes.Buffer, tag string) {
@@ -290,44 +416,8 @@ func (rndr *HtmlRenderer) blockhtml(ob *bytes.Buffer, text *bytes.Buffer) {
 	ob.WriteByte('\n')
 }
 
-func put_scaped_char(ob *bytes.Buffer, c byte) {
-	switch {
-	case c == '<':
-		ob.WriteString("&lt;")
-	case c == '>':
-		ob.WriteString("&gt;")
-	case c == '&':
-		ob.WriteString("&amp;")
-	case c == '"':
-		ob.WriteString("&quot;")
-	default:
-		ob.WriteByte(c)
-	}
-}
-
-/* copy the buffer entity-escaping '<', '>', '&' and '"' */
-func attr_escape(ob *bytes.Buffer, src []byte) {
-	defer un(trace("attr_escape"))
-	size := len(src)
-	i := 0
-	for i < size {
-		/* copying directly unescaped characters */
-		org := i
-		for i < size && src[i] != '<' && src[i] != '>' && src[i] != '&' && src[i] != '"' {
-			i += 1
-		}
-		if i > org {
-			ob.Write(src[org:])
-		}
-
-		/* escaping */
-		if i >= size {
-			break
-		}
-
-		put_scaped_char(ob, src[i])
-		i++
-	}
+func (rndr *HtmlRenderer) triple_emphasis(ob *bytes.Buffer, text []byte) {
+	// TODO: write me
 }
 
 func (rndr *HtmlRenderer) normal_text(ob *bytes.Buffer, text *bytes.Buffer) {
@@ -345,12 +435,6 @@ func (rndr *HtmlRenderer) blockcode(text, lang string) {
 func (rndr *HtmlRenderer) docheader() {
 	defer un(trace("docheader"))
 	// do nothing
-}
-
-// TODO: what other chars are space?
-
-func isspace(c byte) bool {
-	return c == ' '
 }
 
 // rndr_paragraph
@@ -747,17 +831,6 @@ func parse_blockquote(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	rndr.blockquote(ob, out)
 	rndr.popBuf(BUFFER_BLOCK)
 	return end
-}
-
-func isalnum(c byte) bool {
-	if c >= '0' && c <= '9' {
-		return true
-	}
-	if c >= 'A' && c <= 'Z' {
-		return true
-	}
-
-	return c >= 'a' && c <= 'z'
 }
 
 /* returns the current block tag */
