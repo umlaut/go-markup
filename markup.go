@@ -601,8 +601,54 @@ func char_linebreak(ob *bytes.Buffer, rndr *render, data []byte, offset int) int
 
 func char_codespan(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_codespan"))
-	// TODO: write me
-	return 0
+
+	data = data[offset:]
+	size := len(data)
+	nb := 0
+
+	/* counting the number of backticks in the delimiter */
+	for nb < size && data[nb] == '`' {
+		nb++
+	}
+
+	/* finding the next delimiter */
+	i := 0;
+	end := 0
+	for end = nb; end < size && i < nb; end++ {
+		if data[end] == '`' {
+			i++
+		} else {
+			i = 0
+		}
+	}
+
+	if i < nb && end >= size {
+		return 0 /* no matching delimiter */
+	}
+
+	/* trimming outside whitespaces */
+	f_begin := nb
+	for f_begin < end && (data[f_begin] == ' ' || data[f_begin] == '\t') {
+		f_begin++
+	}
+
+	f_end := end - nb
+	for f_end > nb && (data[f_end-1] == ' ' || data[f_end-1] == '\t') {
+		f_end--
+	}
+
+	/* real code span */
+	if f_begin < f_end {
+		if !rndr.make.codespan(ob, data[f_begin:f_end], rndr.make.opaque) {
+			end = 0
+		}
+	} else {
+		if !rndr.make.codespan(ob, nil, rndr.make.opaque) {
+			end = 0
+		}
+	}
+
+	return end
 }
 
 func char_escape(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
