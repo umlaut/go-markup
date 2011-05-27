@@ -442,7 +442,7 @@ func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 
 /* parsing single emphase */
 func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
-	var render_method rndrBufFunc
+	var render_method rndrBufFunc_b
 	i := 0
 	size := len(data)
 	if c == '~' {
@@ -463,11 +463,11 @@ func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 		i += len
 
 		if i + 1 < size && data[i] == c && data[i + 1] == c && i > 0 && !isspace(data[i - 1]) {
-			work := rndr.newBuf(BUFFER_SPAN)
+			work := rndr.newbuf(BUFFER_SPAN)
 			parse_inline(work, rndr, data[:i])
-			r := render_method(ob, work, rndr.make.opaque)
-			rndr.popBuf(BUFFER_SPAN)
-			if r > 0 {
+			r := render_method(ob, work.Bytes(), rndr.make.opaque)
+			rndr.popbuf(BUFFER_SPAN)
+			if r {
 				return i + 2
 			} else {
 				return 0
