@@ -301,7 +301,7 @@ func parse_inline(ob *bytes.Buffer, rndr *render, data []byte) {
 
 		/* calling the trigger */
 		actfunc := markdown_char_ptrs[action]
-		end = actfunc(ob, rndr, data[i:], i)
+		end = actfunc(ob, rndr, data, i) // Note: unlike upskirt, we pass data, not data[i:]
 		if 0 == end {
 			/* no action from the callback */
 			end = i + 1
@@ -578,7 +578,24 @@ func char_emphasis(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 
 func char_linebreak(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_linebreak"))
-	// TODO: write me
+	if offset < 2 || data[offset-1] != ' ' || data[offset-2] != ' ' {
+		return 0
+	}
+
+	len := ob.Len()
+	newlen := len
+	obd := ob.Bytes()
+	/* removing the last space from ob and rendering */
+	for newlen := 0; newlen >= 0 && obd[newlen - 1] == ' '; newlen-- {
+		// do nothing
+	}
+	if newlen != len {
+		ob.Truncate(newlen)
+	}
+
+	if rndr.make.linebreak(ob, rndr.make.opaque) {
+		return 1
+	}
 	return 0
 }
 
