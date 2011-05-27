@@ -418,45 +418,43 @@ func rndr_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 	return true
 }
 
-static void
-rndr_header(struct buf *ob, struct buf *text, int level, interface opaque)
-{
-	struct html_renderopt *options = opaque;
+func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
+	//struct html_renderopt *options = opaque;
 	
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
+	/*
 	if (options->flags & HTML_TOC)
 		bufprintf(ob, "<h%d id=\"toc_%d\">", level, options->toc_data.header_count++);
 	else
 		bufprintf(ob, "<h%d>", level);
-
-	if (text) bufput(ob, text->data, text->size);
-	bufprintf(ob, "</h%d>\n", level);
+	*/
+	ob.Write(text)
+	ob.WriteString(fmt.Sprintf("</h%d>\n", level))
 }
 
-static int
-rndr_link(struct buf *ob, struct buf *link, struct buf *title, struct buf *content, void *opaque)
-{
-	struct html_renderopt *options = opaque;
+func rndr_link(ob *bytes.Buffer, link []byte, title []byte, content []byte, opaque interface{}) bool {
+	//struct html_renderopt *options = opaque;
 	
-	if ((options->flags & HTML_SAFELINK) != 0 && !is_safe_link(link->data, link->size))
-		return 0;
+	//if ((options->flags & HTML_SAFELINK) != 0 && !is_safe_link(link->data, link->size))
+	//	return 0;
 
-	BUFPUTSL(ob, "<a href=\"");
-	if (link && link->size) bufput(ob, link->data, link->size);
-	if (title && title->size) {
-		BUFPUTSL(ob, "\" title=\"");
-		attr_escape(ob, title->data, title->size); }
-	BUFPUTSL(ob, "\">");
-	if (content && content->size) bufput(ob, content->data, content->size);
-	BUFPUTSL(ob, "</a>");
-	return 1;
+	ob.WriteString("<a href=\"")
+	ob.Write(link)
+	if len(title) > 0 {
+		ob.WriteString("\" title=\"")
+		attr_escape(ob, title)
+	}
+	ob.WriteString("\">")
+	ob.Write(content)
+	ob.WriteString("</a>")
+	return true
 }
 
 static void
-rndr_list(struct buf *ob, struct buf *text, int flags, void *opaque)
+rndr_list(ob *bytes.Buffer, text []byte, int flags, void *opaque)
 {
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
@@ -468,7 +466,7 @@ rndr_list(struct buf *ob, struct buf *text, int flags, void *opaque)
 }
 
 static void
-rndr_listitem(struct buf *ob, struct buf *text, int flags, void *opaque)
+rndr_listitem(ob *bytes.Buffer, text []byte, flags int, opaque interface{})
 {
 	BUFPUTSL(ob, "<li>");
 	if (text) {
