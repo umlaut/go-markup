@@ -2,6 +2,7 @@ package markup
 
 import (
 	"bytes"
+	"fmt"
 )
 
 const (
@@ -20,6 +21,18 @@ const (
 	MD_CHAR_ESCAPE
 	MD_CHAR_ENTITITY
 	MD_CHAR_AUTOLINK
+)
+
+/* list/listitem flags */
+const (
+	MKD_LIST_ORDERED = 1
+	MKD_LI_BLOCK	 = 2  /* <li> containing block data */
+)
+
+const (
+	MKD_TABLE_ALIGN_L = 1 << 0
+	MKD_TABLE_ALIGN_R = 1 << 1
+	MKD_TABLE_ALIGN_CENTER = MKD_TABLE_ALIGN_L | MKD_TABLE_ALIGN_R
 )
 
 const (
@@ -369,7 +382,7 @@ func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte) {
 	} else {
 		ob.WriteString("<pre><code>")
 	}
-	if len(text > 0) {
+	if len(text) > 0 {
 		attr_escape(ob, text)
 	}
 
@@ -459,13 +472,13 @@ func rndr_list(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
 		ob.WriteByte('\n')
 	}
 
-	if flags & MKD_LIST_ORDERED {
+	if flags & MKD_LIST_ORDERED != 0 {
 		ob.WriteString("<ol>\n")
 	} else {
 		ob.WriteString("<ul>\n")		
 	}
 	ob.Write(text)
-	if flags & MKD_LIST_ORDERED {
+	if flags & MKD_LIST_ORDERED != 0 {
 		ob.WriteString("</ol>\n")
 	} else {
 		ob.WriteString("</ul>\n")		
@@ -545,10 +558,10 @@ func rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{}) {
 		return
 	}
 	if ob.Len() > 0 {
-		ob.Write('\n')
+		ob.WriteByte('\n')
 	}
 	ob.Write(text[org:sz])
-	ob.Write('\n')
+	ob.WriteByte('\n')
 }
 
 func rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
@@ -625,7 +638,7 @@ func rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{}
 	ob.WriteString("<table><thead>\n")
 	ob.Write(header)
 	ob.WriteString("\n</thead><tbody>\n")
-	ob.Wirte(body)
+	ob.Write(body)
 	ob.WriteString("\n</tbody></table>")
 }
 
@@ -642,17 +655,17 @@ func rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{}
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
-	switch align {
-	case MKD_TABLE_ALIGN_L:
+	switch {
+	case align == MKD_TABLE_ALIGN_L:
 		ob.WriteString("<td align=\"left\">")
 
-	case MKD_TABLE_ALIGN_R:
+	case align == MKD_TABLE_ALIGN_R:
 		ob.WriteString("<td align=\"right\">")
 
-	case MKD_TABLE_ALIGN_CENTER:
+	case align == MKD_TABLE_ALIGN_CENTER:
 		ob.WriteString("<td align=\"center\">")
 
-	true:
+	case true:
 		ob.WriteString("<td>")
 	}
 
@@ -664,11 +677,10 @@ func rndr_normal_text(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	attr_escape(ob, text)
 }
 
-static void
-toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{})
-{
-	struct html_renderopt *options = opaque;
+func toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
+	//struct html_renderopt *options = opaque;
 
+	/*
 	while (level > options->toc_data.current_level) {
 		if (options->toc_data.current_level > 0)
 			BUFPUTSL(ob, "<li>");
@@ -682,23 +694,24 @@ toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{})
 			BUFPUTSL(ob, "</li>\n");
 		options->toc_data.current_level--;
 	}
+	*/
 
-	bufprintf(ob, "<li><a href=\"#toc_%d\">", options->toc_data.header_count++);
-	if (text)
-		bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "</a></li>\n");
+	//bufprintf(ob, "<li><a href=\"#toc_%d\">", options->toc_data.header_count++);
+	ob.Write(text)
+	ob.WriteString("</a></li>\n")
 }
 
-static void
-toc_finalize(ob *bytes.Buffer, opaque interface{})
-{
-	struct html_renderopt *options = opaque;
+func toc_finalize(ob *bytes.Buffer, opaque interface{}) {
+	//struct html_renderopt *options = opaque;
 
-	while (options->toc_data.current_level > 1) {
-		BUFPUTSL(ob, "</ul></li>\n");
+	/*
+	for options->toc_data.current_level > 1 {
+		ob.WriteString("</ul></li>\n")
 		options->toc_data.current_level--;
 	}
 
-	if (options->toc_data.current_level)
-		BUFPUTSL(ob, "</ul>\n");
+	if options->toc_data.current_level {
+		ob.WriteString("</ul>\n")
+	}
+	*/
 }
