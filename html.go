@@ -12,6 +12,16 @@ const (
 )
 
 const (
+	MKDEXT_NO_INTRA_EMPHASIS = 1 << 0
+	MKDEXT_TABLES            = 1 << 1
+	MKDEXT_FENCED_CODE       = 1 << 2
+	MKDEXT_AUTOLINK          = 1 << 3
+	MKDEXT_STRIKETHROUGH     = 1 << 4
+	MKDEXT_LAX_HTML_BLOCKS   = 1 << 5
+	MKDEXT_SPACE_HEADERS     = 1 << 6
+)
+
+const (
 	MD_CHAR_NONE = iota
 	MD_CHAR_EMPHASIS
 	MD_CHAR_CODESPAN
@@ -21,6 +31,19 @@ const (
 	MD_CHAR_ESCAPE
 	MD_CHAR_ENTITITY
 	MD_CHAR_AUTOLINK
+)
+
+const (
+	HTML_SKIP_HTML = 1 << 0
+	HTML_SKIP_STYLE = 1 << 1
+	HTML_SKIP_IMAGES = 1 << 2
+	HTML_SKIP_LINKS = 1 << 3
+	HTML_EXPAND_TABS = 1 << 5
+	HTML_SAFELINK = 1 << 7
+	HTML_TOC = 1 << 8
+	HTML_HARD_WRAP = 1 << 9
+	HTML_GITHUB_BLOCKCODE = 1 << 10
+	HTML_USE_XHTML = 1 << 11
 )
 
 /* list/listitem flags */
@@ -36,9 +59,69 @@ const (
 )
 
 const (
-	xhtmlClose = "/>\n"
-	htmlClose  = ">\n"
+	xhtml_close = "/>\n"
+	html_close  = ">\n"
 )
+
+type html_renderopt struct {
+	toc_data struct {
+		header_count int 
+		current_level int
+	}
+
+	flags uint
+	close_tag string
+}
+
+type rndrFunc       func(*bytes.Buffer, interface{})
+type rndrBufFunc    func(*bytes.Buffer, []byte, interface{})
+type rndrBufBufFunc func(*bytes.Buffer, []byte, []byte, interface{})
+type rndBufIntFunc  func(*bytes.Buffer, []byte, int, interface{})
+
+type rndrFunc_b          func(*bytes.Buffer, interface{}) bool
+type rndrBufFunc_b       func(*bytes.Buffer, []byte, interface{}) bool
+type rndBufIntFunc_b     func(*bytes.Buffer, []byte, int, interface{}) bool
+type rndrBufBufFunc_b    func(*bytes.Buffer, []byte, []byte, interface{}) bool
+type rndrBufBufBufFunc_b func(*bytes.Buffer, []byte, []byte, []byte, interface{}) bool
+
+/* functions for rendering parsed data */
+type mkd_renderer struct  {
+	/* block level callbacks - NULL skips the block */
+	blockcode rndrBufBufFunc
+	blockquote rndrBufFunc
+	blockhtml rndrBufFunc
+	header rndBufIntFunc
+	hrule rndrFunc
+	list rndBufIntFunc
+	listitem rndBufIntFunc
+	paragraph rndrBufFunc
+	table rndrBufBufFunc
+	table_row rndrBufFunc
+	table_cell rndBufIntFunc
+
+	/* span level callbacks - NULL or return 0 prints the span verbatim */
+	autolink rndBufIntFunc_b
+	codespan rndrBufFunc_b
+	double_emphasis rndrBufFunc_b
+	emphasis rndrBufFunc_b
+	image rndrBufBufBufFunc_b
+	linebreak rndrFunc_b
+	link rndrBufBufBufFunc_b
+	raw_html_tag rndrBufFunc_b
+	triple_emphasis rndrBufFunc_b
+	strikethrough rndrBufFunc_b
+
+	/* low level callbacks - NULL copies input directly into the output */
+	entity rndrBufFunc
+	normal_text rndrBufFunc
+
+	/* header and footer */
+	doc_header rndrFunc
+	doc_footer rndrFunc
+
+	/* user data */
+	opaque interface{}
+}
 
 type MarkdownOptions struct {
 	/*	HTML_SKIP_HTML = (1 << 0),
@@ -115,6 +198,7 @@ func isalnum(c byte) bool {
 	return c >= 'a' && c <= 'z'
 }
 
+/* 
 func newHtmlRenderer(options *MarkdownOptions) *HtmlRenderer {
 	defer un(trace("newHtmlRenderer"))
 
@@ -153,6 +237,7 @@ func newHtmlRenderer(options *MarkdownOptions) *HtmlRenderer {
 	r.maxNesting = 16
 	return r
 }
+*/
 
 func (rndr *HtmlRenderer) newBuf(bufType int) (buf *bytes.Buffer) {
 	defer un(trace("newBuf"))
@@ -295,7 +380,7 @@ func rndr_autolink(ob *bytes.Buffer, link []byte, typ int, opaque interface{}) b
 	return true
 }
 
-func rndr_blockcode(ob *bytes.Buffer, text []byte, lang []byte) {
+func rndr_blockcode(ob *bytes.Buffer, text []byte, lang []byte, opaque interface{}) {
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
@@ -357,7 +442,7 @@ func rndr_blockcode(ob *bytes.Buffer, text []byte, lang []byte) {
  * E.g.
  *		~~~~ {.python .numbered}	=>	<pre lang="python"><code>
  */
-func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte) {
+func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte, opaque interface{}) {
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
@@ -714,4 +799,66 @@ func toc_finalize(ob *bytes.Buffer, opaque interface{}) {
 		ob.WriteString("</ul>\n")
 	}
 	*/
+}
+
+
+func upshtml_renderer(render_flags uint) *mkd_renderer {
+
+	renderer := &mkd_renderer{
+		rndr_blockcode,
+		rndr_blockquote,
+		rndr_raw_block,
+		rndr_header,
+		rndr_hrule,
+		rndr_list,
+		rndr_listitem,
+		rndr_paragraph,
+		rndr_table,
+		rndr_tablerow,
+		rndr_tablecell,
+
+		rndr_autolink,
+		rndr_codespan,
+		rndr_double_emphasis,
+		rndr_emphasis,
+		rndr_image,
+		rndr_linebreak,
+		rndr_link,
+		rndr_raw_html,
+		rndr_triple_emphasis,
+		rndr_strikethrough,
+
+		nil,
+		rndr_normal_text,
+
+		nil,
+		nil,
+		nil}
+
+	var opts html_renderopt
+	opts.flags = render_flags
+	opts.close_tag = html_close
+	if render_flags & HTML_USE_XHTML != 0 {
+		opts.close_tag = xhtml_close
+	}
+	renderer.opaque = &opts
+
+	if render_flags & HTML_SKIP_IMAGES != 0 {
+		renderer.image = nil
+	}
+
+	if render_flags & HTML_SKIP_LINKS != 0 {
+		renderer.link = nil
+		renderer.autolink = nil
+	}
+
+	if render_flags & HTML_SKIP_HTML != 0 {
+		renderer.blockhtml = nil
+	}
+
+	if render_flags & HTML_GITHUB_BLOCKCODE != 0 {
+		renderer.blockcode = rndr_blockcode_github
+	}
+
+	return renderer
 }
