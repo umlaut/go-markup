@@ -204,7 +204,7 @@ func attr_escape(ob *bytes.Buffer, src []byte) {
 	}
 }
 
-func is_html_tag(tag []byte, tagname []byte) bool {
+func is_html_tag(tag []byte, tagname string) bool {
 	i := 0
 	size := len(tag)
 	if i < size && tag[0] != '<' {
@@ -225,8 +225,9 @@ func is_html_tag(tag []byte, tagname []byte) bool {
 		i++
 	}
 	j := 0
-	for i < size && j < len(tagname) {
-		if tag[i] != tagname[j] {
+	tagnameb := []byte(tagname) // TODO: use bytes.HasPrefix()?
+	for i < size && j < len(tagnameb) {
+		if tag[i] != tagnameb[j] {
 			return false
 		}
 		i++
@@ -481,61 +482,73 @@ func rndr_listitem(ob *bytes.Buffer, text []byte, flags int, opaque interface{})
 	ob.WriteString("</li>\n")
 }
 
-static void
-rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{})
-{
-	struct html_renderopt *options = opaque;
-	size_t i = 0;
+func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	//struct html_renderopt *options = opaque;
+	i := 0
 
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
-	if (!text || !text->size)
-		return;
+	if len(text) == 0 {
+		return
+	}
 
-	while (i < text->size && isspace(text->data[i])) i++;
+	size := len(text)
+	for i < size && isspace(text[i]) {
+		i++
+	}
 
-	if (i == text->size)
-		return;
+	if i == size {
+		return
+	}
 
-	BUFPUTSL(ob, "<p>");
-	if (options->flags & HTML_HARD_WRAP) {
-		size_t org;
-		while (i < text->size) {
-			org = i;
-			while (i < text->size && text->data[i] != '\n')
-				i++;
+	ob.WriteString("<p>")
+	if true { // options->flags & HTML_HARD_WRAP {
+		for i < size {
+			org := i
+			for i < size && text[i] != '\n' {
+				i++
+			}
 
-			if (i > org)
-				bufput(ob, text->data + org, i - org);
+			if i > org {
+				ob.Write(text[org:i])
+			}
 
-			if (i >= text->size)
-				break;
-
-			BUFPUTSL(ob, "<br");
-			bufputs(ob, options->close_tag);
-			i++;
+			if i >= size {
+				break
+			}
+			
+			ob.WriteString("<br")
+			//ob.WriteString(options.close_tag)
+			i++
 		}
 	} else {
-		bufput(ob, &text->data[i], text->size - i);
+		ob.Write(text[i:])
 	}
-	BUFPUTSL(ob, "</p>\n");
+	ob.WriteString("</p>\n")
 }
 
-static void
-rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{})
-{
-	size_t org, sz;
-	if (!text) return;
-	sz = text->size;
-	while (sz > 0 && text->data[sz - 1] == '\n') sz -= 1;
-	org = 0;
-	while (org < sz && text->data[org] == '\n') org += 1;
-	if (org >= sz) return;
-	if (ob->size) bufputc(ob, '\n');
-	bufput(ob, text->data + org, sz - org);
-	bufputc(ob, '\n');
+func rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	if len(text) == 0 {
+		return
+	}
+	sz := len(text)
+	for sz > 0 && text[sz - 1] == '\n' {
+		sz -= 1
+	}
+	org := 0
+	for org < sz && text[org] == '\n' {
+		org += 1
+	}
+	if org >= sz {
+		return
+	}
+	if ob.Len() > 0 {
+		ob.Write('\n')
+	}
+	ob.Write(text[org:sz])
+	ob.Write('\n')
 }
 
 static int
@@ -584,11 +597,10 @@ func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
 	return true
 }
 
-static int
-rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{})
-{
-	struct html_renderopt *options = opaque;	
+func rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	//struct html_renderopt *options = opaque;	
 
+/*
 	if ((options->flags & HTML_SKIP_HTML) != 0)
 		return 1;
 
@@ -600,15 +612,17 @@ rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{})
 
 	if ((options->flags & HTML_SKIP_IMAGES) != 0 && is_html_tag(text, "img"))
 		return 1;
-
-	bufput(ob, text->data, text->size);
-	return 1;
+*/
+	ob.Write(text)
+	return true
 }
 
-static void
-rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{})
-{
-	if (ob->size) bufputc(ob, '\n');
+func rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{}) {
+
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
+
 	BUFPUTSL(ob, "<table><thead>\n");
 	if (header)
 		bufput(ob, header->data, header->size);
@@ -621,7 +635,9 @@ rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{})
 static void
 rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{})
 {
-	if (ob->size) bufputc(ob, '\n');
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
 	BUFPUTSL(ob, "<tr>\n");
 	if (text)
 		bufput(ob, text->data, text->size);
@@ -631,7 +647,9 @@ rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{})
 static void
 rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{})
 {
-	if (ob->size) bufputc(ob, '\n');
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
 	switch (align) {
 	case MKD_TABLE_ALIGN_L:
 		BUFPUTSL(ob, "<td align=\"left\">");
@@ -655,11 +673,8 @@ rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{})
 	BUFPUTSL(ob, "</td>");
 }
 
-static void
-rndr_normal_text(ob *bytes.Buffer, text []byte, opaque interface{})
-{
-	if (text)
-		attr_escape(ob, text->data, text->size);
+func rndr_normal_text(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	attr_escape(ob, text)
 }
 
 static void
@@ -700,4 +715,3 @@ toc_finalize(ob *bytes.Buffer, opaque interface{})
 	if (options->toc_data.current_level)
 		BUFPUTSL(ob, "</ul>\n");
 }
-
