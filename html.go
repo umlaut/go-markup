@@ -34,27 +34,27 @@ const (
 )
 
 const (
-	HTML_SKIP_HTML = 1 << 0
-	HTML_SKIP_STYLE = 1 << 1
-	HTML_SKIP_IMAGES = 1 << 2
-	HTML_SKIP_LINKS = 1 << 3
-	HTML_EXPAND_TABS = 1 << 5
-	HTML_SAFELINK = 1 << 7
-	HTML_TOC = 1 << 8
-	HTML_HARD_WRAP = 1 << 9
+	HTML_SKIP_HTML        = 1 << 0
+	HTML_SKIP_STYLE       = 1 << 1
+	HTML_SKIP_IMAGES      = 1 << 2
+	HTML_SKIP_LINKS       = 1 << 3
+	HTML_EXPAND_TABS      = 1 << 5
+	HTML_SAFELINK         = 1 << 7
+	HTML_TOC              = 1 << 8
+	HTML_HARD_WRAP        = 1 << 9
 	HTML_GITHUB_BLOCKCODE = 1 << 10
-	HTML_USE_XHTML = 1 << 11
+	HTML_USE_XHTML        = 1 << 11
 )
 
 /* list/listitem flags */
 const (
 	MKD_LIST_ORDERED = 1
-	MKD_LI_BLOCK	 = 2  /* <li> containing block data */
+	MKD_LI_BLOCK     = 2 /* <li> containing block data */
 )
 
 const (
-	MKD_TABLE_ALIGN_L = 1 << 0
-	MKD_TABLE_ALIGN_R = 1 << 1
+	MKD_TABLE_ALIGN_L      = 1 << 0
+	MKD_TABLE_ALIGN_R      = 1 << 1
 	MKD_TABLE_ALIGN_CENTER = MKD_TABLE_ALIGN_L | MKD_TABLE_ALIGN_R
 )
 
@@ -65,54 +65,54 @@ const (
 
 type html_renderopt struct {
 	toc_data struct {
-		header_count int 
+		header_count  int
 		current_level int
 	}
 
-	flags uint
+	flags     uint
 	close_tag string
 }
 
-type rndrFunc       func(*bytes.Buffer, interface{})
-type rndrBufFunc    func(*bytes.Buffer, []byte, interface{})
+type rndrFunc func(*bytes.Buffer, interface{})
+type rndrBufFunc func(*bytes.Buffer, []byte, interface{})
 type rndrBufBufFunc func(*bytes.Buffer, []byte, []byte, interface{})
-type rndBufIntFunc  func(*bytes.Buffer, []byte, int, interface{})
+type rndBufIntFunc func(*bytes.Buffer, []byte, int, interface{})
 
-type rndrFunc_b          func(*bytes.Buffer, interface{}) bool
-type rndrBufFunc_b       func(*bytes.Buffer, []byte, interface{}) bool
-type rndBufIntFunc_b     func(*bytes.Buffer, []byte, int, interface{}) bool
-type rndrBufBufFunc_b    func(*bytes.Buffer, []byte, []byte, interface{}) bool
+type rndrFunc_b func(*bytes.Buffer, interface{}) bool
+type rndrBufFunc_b func(*bytes.Buffer, []byte, interface{}) bool
+type rndBufIntFunc_b func(*bytes.Buffer, []byte, int, interface{}) bool
+type rndrBufBufFunc_b func(*bytes.Buffer, []byte, []byte, interface{}) bool
 type rndrBufBufBufFunc_b func(*bytes.Buffer, []byte, []byte, []byte, interface{}) bool
 
 /* functions for rendering parsed data */
-type mkd_renderer struct  {
+type mkd_renderer struct {
 	/* block level callbacks - NULL skips the block */
-	blockcode rndrBufBufFunc
+	blockcode  rndrBufBufFunc
 	blockquote rndrBufFunc
-	blockhtml rndrBufFunc
-	header rndBufIntFunc
-	hrule rndrFunc
-	list rndBufIntFunc
-	listitem rndBufIntFunc
-	paragraph rndrBufFunc
-	table rndrBufBufFunc
-	table_row rndrBufFunc
+	blockhtml  rndrBufFunc
+	header     rndBufIntFunc
+	hrule      rndrFunc
+	list       rndBufIntFunc
+	listitem   rndBufIntFunc
+	paragraph  rndrBufFunc
+	table      rndrBufBufFunc
+	table_row  rndrBufFunc
 	table_cell rndBufIntFunc
 
 	/* span level callbacks - NULL or return 0 prints the span verbatim */
-	autolink rndBufIntFunc_b
-	codespan rndrBufFunc_b
+	autolink        rndBufIntFunc_b
+	codespan        rndrBufFunc_b
 	double_emphasis rndrBufFunc_b
-	emphasis rndrBufFunc_b
-	image rndrBufBufBufFunc_b
-	linebreak rndrFunc_b
-	link rndrBufBufBufFunc_b
-	raw_html_tag rndrBufFunc_b
+	emphasis        rndrBufFunc_b
+	image           rndrBufBufBufFunc_b
+	linebreak       rndrFunc_b
+	link            rndrBufBufBufFunc_b
+	raw_html_tag    rndrBufFunc_b
 	triple_emphasis rndrBufFunc_b
-	strikethrough rndrBufFunc_b
+	strikethrough   rndrBufFunc_b
 
 	/* low level callbacks - NULL copies input directly into the output */
-	entity rndrBufFunc
+	entity      rndrBufFunc
 	normal_text rndrBufFunc
 
 	/* header and footer */
@@ -351,10 +351,10 @@ func rndr_autolink(ob *bytes.Buffer, link []byte, typ int, opaque interface{}) b
 	}
 
 	/*
-	if ((options->flags & HTML_SAFELINK) != 0 &&
-		!is_safe_link(link->data, link->size) &&
-		type != MKDA_EMAIL)
-		return 0;
+		if ((options->flags & HTML_SAFELINK) != 0 &&
+			!is_safe_link(link->data, link->size) &&
+			type != MKDA_EMAIL)
+			return 0;
 	*/
 
 	ob.WriteString("<a href=\"")
@@ -448,7 +448,7 @@ func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte, opaque in
 	}
 
 	if len(lang) > 0 {
-		i := 0;
+		i := 0
 		ob.WriteString("<pre lang=\"")
 
 		for i < len(lang) && !isspace(lang[i]) {
@@ -519,16 +519,16 @@ func rndr_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 
 func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
 	//struct html_renderopt *options = opaque;
-	
+
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
 	/*
-	if (options->flags & HTML_TOC)
-		bufprintf(ob, "<h%d id=\"toc_%d\">", level, options->toc_data.header_count++);
-	else
-		bufprintf(ob, "<h%d>", level);
+		if (options->flags & HTML_TOC)
+			bufprintf(ob, "<h%d id=\"toc_%d\">", level, options->toc_data.header_count++);
+		else
+			bufprintf(ob, "<h%d>", level);
 	*/
 	ob.Write(text)
 	ob.WriteString(fmt.Sprintf("</h%d>\n", level))
@@ -536,7 +536,7 @@ func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
 
 func rndr_link(ob *bytes.Buffer, link []byte, title []byte, content []byte, opaque interface{}) bool {
 	//struct html_renderopt *options = opaque;
-	
+
 	//if ((options->flags & HTML_SAFELINK) != 0 && !is_safe_link(link->data, link->size))
 	//	return 0;
 
@@ -557,16 +557,16 @@ func rndr_list(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
 		ob.WriteByte('\n')
 	}
 
-	if flags & MKD_LIST_ORDERED != 0 {
+	if flags&MKD_LIST_ORDERED != 0 {
 		ob.WriteString("<ol>\n")
 	} else {
-		ob.WriteString("<ul>\n")		
+		ob.WriteString("<ul>\n")
 	}
 	ob.Write(text)
-	if flags & MKD_LIST_ORDERED != 0 {
+	if flags&MKD_LIST_ORDERED != 0 {
 		ob.WriteString("</ol>\n")
 	} else {
-		ob.WriteString("</ul>\n")		
+		ob.WriteString("</ul>\n")
 	}
 }
 
@@ -616,7 +616,7 @@ func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
 			if i >= size {
 				break
 			}
-			
+
 			ob.WriteString("<br")
 			//ob.WriteString(options.close_tag)
 			i++
@@ -632,7 +632,7 @@ func rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{}) {
 		return
 	}
 	sz := len(text)
-	for sz > 0 && text[sz - 1] == '\n' {
+	for sz > 0 && text[sz-1] == '\n' {
 		sz -= 1
 	}
 	org := 0
@@ -699,19 +699,19 @@ func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
 func rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 	//struct html_renderopt *options = opaque;	
 
-/*
-	if ((options->flags & HTML_SKIP_HTML) != 0)
-		return 1;
+	/*
+		if ((options->flags & HTML_SKIP_HTML) != 0)
+			return 1;
 
-	if ((options->flags & HTML_SKIP_STYLE) != 0 && is_html_tag(text, "style"))
-		return 1;
+		if ((options->flags & HTML_SKIP_STYLE) != 0 && is_html_tag(text, "style"))
+			return 1;
 
-	if ((options->flags & HTML_SKIP_LINKS) != 0 && is_html_tag(text, "a"))
-		return 1;
+		if ((options->flags & HTML_SKIP_LINKS) != 0 && is_html_tag(text, "a"))
+			return 1;
 
-	if ((options->flags & HTML_SKIP_IMAGES) != 0 && is_html_tag(text, "img"))
-		return 1;
-*/
+		if ((options->flags & HTML_SKIP_IMAGES) != 0 && is_html_tag(text, "img"))
+			return 1;
+	*/
 	ob.Write(text)
 	return true
 }
@@ -766,19 +766,19 @@ func toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
 	//struct html_renderopt *options = opaque;
 
 	/*
-	while (level > options->toc_data.current_level) {
-		if (options->toc_data.current_level > 0)
-			BUFPUTSL(ob, "<li>");
-		BUFPUTSL(ob, "<ul>\n");
-		options->toc_data.current_level++;
-	}
+		while (level > options->toc_data.current_level) {
+			if (options->toc_data.current_level > 0)
+				BUFPUTSL(ob, "<li>");
+			BUFPUTSL(ob, "<ul>\n");
+			options->toc_data.current_level++;
+		}
 
-	while (level < options->toc_data.current_level) {
-		BUFPUTSL(ob, "</ul>");
-		if (options->toc_data.current_level > 1)
-			BUFPUTSL(ob, "</li>\n");
-		options->toc_data.current_level--;
-	}
+		while (level < options->toc_data.current_level) {
+			BUFPUTSL(ob, "</ul>");
+			if (options->toc_data.current_level > 1)
+				BUFPUTSL(ob, "</li>\n");
+			options->toc_data.current_level--;
+		}
 	*/
 
 	//bufprintf(ob, "<li><a href=\"#toc_%d\">", options->toc_data.header_count++);
@@ -790,14 +790,14 @@ func toc_finalize(ob *bytes.Buffer, opaque interface{}) {
 	//struct html_renderopt *options = opaque;
 
 	/*
-	for options->toc_data.current_level > 1 {
-		ob.WriteString("</ul></li>\n")
-		options->toc_data.current_level--;
-	}
+		for options->toc_data.current_level > 1 {
+			ob.WriteString("</ul></li>\n")
+			options->toc_data.current_level--;
+		}
 
-	if options->toc_data.current_level {
-		ob.WriteString("</ul>\n")
-	}
+		if options->toc_data.current_level {
+			ob.WriteString("</ul>\n")
+		}
 	*/
 }
 
@@ -838,25 +838,25 @@ func upshtml_renderer(render_flags uint) *mkd_renderer {
 	var opts html_renderopt
 	opts.flags = render_flags
 	opts.close_tag = html_close
-	if render_flags & HTML_USE_XHTML != 0 {
+	if render_flags&HTML_USE_XHTML != 0 {
 		opts.close_tag = xhtml_close
 	}
 	renderer.opaque = &opts
 
-	if render_flags & HTML_SKIP_IMAGES != 0 {
+	if render_flags&HTML_SKIP_IMAGES != 0 {
 		renderer.image = nil
 	}
 
-	if render_flags & HTML_SKIP_LINKS != 0 {
+	if render_flags&HTML_SKIP_LINKS != 0 {
 		renderer.link = nil
 		renderer.autolink = nil
 	}
 
-	if render_flags & HTML_SKIP_HTML != 0 {
+	if render_flags&HTML_SKIP_HTML != 0 {
 		renderer.blockhtml = nil
 	}
 
-	if render_flags & HTML_GITHUB_BLOCKCODE != 0 {
+	if render_flags&HTML_GITHUB_BLOCKCODE != 0 {
 		renderer.blockcode = rndr_blockcode_github
 	}
 
