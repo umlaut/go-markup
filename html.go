@@ -123,18 +123,18 @@ type mkd_renderer struct {
 	opaque interface{}
 }
 
+type render struct {
+	make mkd_renderer
+	refs       []*LinkRef
+	active_char [256]byte
+	work_bufs [2][]*bytes.Buffer
+
+	/*block_bufs  []*bytes.Buffer
+	span_bufs   []*bytes.Buffer*/
+	max_nesting int
+}
+
 type MarkdownOptions struct {
-	/*	HTML_SKIP_HTML = (1 << 0),
-		HTML_SKIP_STYLE = (1 << 1),
-		HTML_SKIP_IMAGES = (1 << 2),
-		HTML_SKIP_LINKS = (1 << 3),
-		HTML_EXPAND_TABS = (1 << 5),
-		HTML_SAFELINK = (1 << 7),
-		HTML_TOC = (1 << 8),
-		HTML_HARD_WRAP = (1 << 9),
-		HTML_GITHUB_BLOCKCODE = (1 << 10),
-		HTML_USE_XHTML = (1 << 11),
-	*/
 	SkipHtml        bool
 	SkipStyle       bool
 	SkipImages      bool
@@ -145,16 +145,6 @@ type MarkdownOptions struct {
 	GitHubBlockCode bool
 	Xhtml           bool
 
-	/* bools below map:
-	enum mkd_extensions {
-		MKDEXT_NO_INTRA_EMPHASIS = (1 << 0),
-		MKDEXT_TABLES = (1 << 1),
-		MKDEXT_FENCED_CODE = (1 << 2),
-		MKDEXT_AUTOLINK = (1 << 3),
-		MKDEXT_STRIKETHROUGH = (1 << 4),
-		MKDEXT_LAX_HTML_BLOCKS = (1 << 5),
-		MKDEXT_SPACE_HEADERS = (1 << 6),
-	};*/
 	ExtNoIntraEmphasis bool
 	ExtTables          bool
 	ExtFencedCode      bool
@@ -343,19 +333,16 @@ func is_html_tag(tag []byte, tagname string) bool {
  * GENERIC RENDERER *
  ********************/
 func rndr_autolink(ob *bytes.Buffer, link []byte, typ int, opaque interface{}) bool {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
 
 	size := len(link)
 	if 0 == size {
 		return false
 	}
 
-	/*
-		if ((options->flags & HTML_SAFELINK) != 0 &&
-			!is_safe_link(link->data, link->size) &&
-			type != MKDA_EMAIL)
-			return 0;
-	*/
+	if (options.flags & HTML_SAFELINK != 0) && !is_safe_link(link) && typ != MKDA_EMAIL {
+		return false
+	}
 
 	ob.WriteString("<a href=\"")
 	if typ == MKDA_EMAIL {
@@ -518,27 +505,28 @@ func rndr_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 }
 
 func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
 
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
-	/*
-		if (options->flags & HTML_TOC)
-			bufprintf(ob, "<h%d id=\"toc_%d\">", level, options->toc_data.header_count++);
-		else
-			bufprintf(ob, "<h%d>", level);
-	*/
+	if options.flags & HTML_TOC != 0 {
+		ob.WriteString(fmt.Sprintf("<h%d id=\"toc_%d\">", level, options.toc_data.header_count))
+		options.toc_data.header_count++
+	} else {
+		ob.WriteString(fmt.Sprintf("<h%d>", level))
+	}
 	ob.Write(text)
 	ob.WriteString(fmt.Sprintf("</h%d>\n", level))
 }
 
 func rndr_link(ob *bytes.Buffer, link []byte, title []byte, content []byte, opaque interface{}) bool {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
 
-	//if ((options->flags & HTML_SAFELINK) != 0 && !is_safe_link(link->data, link->size))
-	//	return 0;
+	if (options.flags & HTML_SAFELINK != 0) && !is_safe_link(link) {
+		return false
+	}
 
 	ob.WriteString("<a href=\"")
 	ob.Write(link)
@@ -581,7 +569,8 @@ func rndr_listitem(ob *bytes.Buffer, text []byte, flags int, opaque interface{})
 }
 
 func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
+
 	i := 0
 
 	if ob.Len() > 0 {
@@ -602,7 +591,7 @@ func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	}
 
 	ob.WriteString("<p>")
-	if true { // options->flags & HTML_HARD_WRAP {
+	if options.flags & HTML_HARD_WRAP != 0 {
 		for i < size {
 			org := i
 			for i < size && text[i] != '\n' {
@@ -618,7 +607,7 @@ func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
 			}
 
 			ob.WriteString("<br")
-			//ob.WriteString(options.close_tag)
+			ob.WriteString(options.close_tag)
 			i++
 		}
 	} else {
@@ -660,18 +649,18 @@ func rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) boo
 }
 
 func rndr_hrule(ob *bytes.Buffer, opaque interface{}) {
-	//struct html_renderopt *options = opaque;	
+	options, _ := opaque.(*html_renderopt)
 
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
 	ob.WriteString("<hr")
-	//bufputs(ob, options->close_tag);
+	ob.WriteString(options.close_tag)
 }
 
 func rndr_image(ob *bytes.Buffer, link []byte, title []byte, alt []byte, opaque interface{}) bool {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
 	if len(link) == 0 {
 		return false
 	}
@@ -685,33 +674,36 @@ func rndr_image(ob *bytes.Buffer, link []byte, title []byte, alt []byte, opaque 
 	}
 
 	ob.WriteByte('"')
-	//ob.WriteString(options.close_tag)
+	ob.WriteString(options.close_tag)
 	return true
 }
 
 func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
 	ob.WriteString("<br")
-	//bufputs(ob, options->close_tag);
+	ob.WriteString(options.close_tag)
 	return true
 }
 
 func rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
-	//struct html_renderopt *options = opaque;	
+	options, _ := opaque.(*html_renderopt)
 
-	/*
-		if ((options->flags & HTML_SKIP_HTML) != 0)
-			return 1;
+	if options.flags & HTML_SKIP_HTML != 0 {
+		return true
+	}
 
-		if ((options->flags & HTML_SKIP_STYLE) != 0 && is_html_tag(text, "style"))
-			return 1;
+	if (options.flags & HTML_SKIP_STYLE != 0) && is_html_tag(text, "style") {
+		return true
+	}
 
-		if ((options->flags & HTML_SKIP_LINKS) != 0 && is_html_tag(text, "a"))
-			return 1;
+	if (options.flags & HTML_SKIP_LINKS != 0) && is_html_tag(text, "a") {
+		return true
+	}
 
-		if ((options->flags & HTML_SKIP_IMAGES) != 0 && is_html_tag(text, "img"))
-			return 1;
-	*/
+	if (options.flags & HTML_SKIP_IMAGES != 0) && is_html_tag(text, "img") {
+		return true
+	}
+
 	ob.Write(text)
 	return true
 }
@@ -763,44 +755,42 @@ func rndr_normal_text(ob *bytes.Buffer, text []byte, opaque interface{}) {
 }
 
 func toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
 
-	/*
-		while (level > options->toc_data.current_level) {
-			if (options->toc_data.current_level > 0)
-				BUFPUTSL(ob, "<li>");
-			BUFPUTSL(ob, "<ul>\n");
-			options->toc_data.current_level++;
+	for level > options.toc_data.current_level {
+		if options.toc_data.current_level > 0 {
+			ob.WriteString("<li>")
 		}
+		ob.WriteString("<ul>\n")
+		options.toc_data.current_level++
+	}
 
-		while (level < options->toc_data.current_level) {
-			BUFPUTSL(ob, "</ul>");
-			if (options->toc_data.current_level > 1)
-				BUFPUTSL(ob, "</li>\n");
-			options->toc_data.current_level--;
+	for level < options.toc_data.current_level {
+		ob.WriteString("</ul>")
+		if options.toc_data.current_level > 1 {
+			ob.WriteString("</li>\n")
 		}
-	*/
+		options.toc_data.current_level--
+	}
 
-	//bufprintf(ob, "<li><a href=\"#toc_%d\">", options->toc_data.header_count++);
+	ob.WriteString(fmt.Sprintf("<li><a href=\"#toc_%d\">", options.toc_data.header_count))
+	options.toc_data.header_count++
 	ob.Write(text)
 	ob.WriteString("</a></li>\n")
 }
 
 func toc_finalize(ob *bytes.Buffer, opaque interface{}) {
-	//struct html_renderopt *options = opaque;
+	options, _ := opaque.(*html_renderopt)
 
-	/*
-		for options->toc_data.current_level > 1 {
-			ob.WriteString("</ul></li>\n")
-			options->toc_data.current_level--;
-		}
+	for options.toc_data.current_level > 1 {
+		ob.WriteString("</ul></li>\n")
+		options.toc_data.current_level--;
+	}
 
-		if options->toc_data.current_level {
-			ob.WriteString("</ul>\n")
-		}
-	*/
+	if options.toc_data.current_level > 0 {
+		ob.WriteString("</ul>\n")
+	}
 }
-
 
 func upshtml_renderer(render_flags uint) *mkd_renderer {
 
