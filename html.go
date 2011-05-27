@@ -551,14 +551,14 @@ func rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	ob.Write('\n')
 }
 
-static int
-rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{})
-{
-	if (!text || !text->size) return 0;
-	BUFPUTSL(ob, "<strong><em>");
-	bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "</em></strong>");
-	return 1;
+func rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	if len(text) == 0 {
+		return false
+	}
+	ob.WriteString("<strong><em>")
+	ob.Write(text)
+	ob.WriteString("</em></strong>")
+	return true
 }
 
 func rndr_hrule(ob *bytes.Buffer, opaque interface{}) {
@@ -581,13 +581,14 @@ func rndr_image(ob *bytes.Buffer, link []byte, title []byte, alt []byte, opaque 
 	attr_escape(ob, link)
 	ob.WriteString("\" alt=\"")
 	attr_escape(ob, alt)
-	if (title && title->size) {
-		BUFPUTSL(ob, "\" title=\"");
-		attr_escape(ob, title->data, title->size); }
+	if len(title) > 0 {
+		ob.WriteString("\" title=\"")
+		attr_escape(ob, title)
+	}
 
-	bufputc(ob, '"');
-	bufputs(ob, options->close_tag);
-	return 1;
+	ob.WriteByte('"')
+	//ob.WriteString(options.close_tag)
+	return true
 }
 
 func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
@@ -618,30 +619,23 @@ func rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 }
 
 func rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{}) {
-
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
-
-	BUFPUTSL(ob, "<table><thead>\n");
-	if (header)
-		bufput(ob, header->data, header->size);
-	BUFPUTSL(ob, "\n</thead><tbody>\n");
-	if (body)
-		bufput(ob, body->data, body->size);
-	BUFPUTSL(ob, "\n</tbody></table>");
+	ob.WriteString("<table><thead>\n")
+	ob.Write(header)
+	ob.WriteString("\n</thead><tbody>\n")
+	ob.Wirte(body)
+	ob.WriteString("\n</tbody></table>")
 }
 
-static void
-rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{})
-{
+func rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
-	BUFPUTSL(ob, "<tr>\n");
-	if (text)
-		bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "\n</tr>");
+	ob.WriteString("<tr>\n")
+	ob.Write(text)
+	ob.WriteString("\n</tr>")
 }
 
 static void
