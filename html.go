@@ -186,8 +186,7 @@ func put_scaped_char(ob *bytes.Buffer, c byte) {
 func attr_escape(ob *bytes.Buffer, src []byte) {
 	defer un(trace("attr_escape"))
 	size := len(src)
-	i := 0
-	for i < size {
+	for i := 0; i < size; i++ {
 		/* copying directly unescaped characters */
 		org := i
 		for i < size && src[i] != '<' && src[i] != '>' && src[i] != '&' && src[i] != '"' {
@@ -201,9 +200,7 @@ func attr_escape(ob *bytes.Buffer, src []byte) {
 		if i >= size {
 			break
 		}
-
 		put_scaped_char(ob, src[i])
-		i++
 	}
 }
 
@@ -384,48 +381,41 @@ func rndr_blockquote(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	ob.WriteString("</blockquote>")
 }
 
-static int
-rndr_codespan(struct buf *ob, struct buf *text, void *opaque)
-{
-	BUFPUTSL(ob, "<code>");
-	if (text) attr_escape(ob, text->data, text->size);
-	BUFPUTSL(ob, "</code>");
-	return 1;
+func rndr_codespan(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	ob.WriteString("<code>")
+	attr_escape(ob, text)
+	ob.WriteString("</code>")
+	return true
 }
 
-static int
-rndr_strikethrough(struct buf *ob, struct buf *text, void *opaque)
-{
-	if (!text || !text->size)
-		return 0;
-
-	BUFPUTSL(ob, "<del>");
-	bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "</del>");
-	return 1;
+func rndr_strikethrough(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	if len(text) == 0 {
+		return false
+	}
+	ob.WriteString("<del>")
+	ob.Write(text)
+	ob.WriteString("</del>")
+	return true
 }
 
-static int
-rndr_double_emphasis(struct buf *ob, struct buf *text, void *opaque)
-{
-	if (!text || !text->size)
-		return 0;
-
-	BUFPUTSL(ob, "<strong>");
-	bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "</strong>");
-
-	return 1;
+func rndr_double_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	if len(text) == 0 {
+		return false
+	}
+	ob.WriteString("<strong>")
+	ob.Write(text)
+	ob.WriteString("</strong>")
+	return true
 }
 
-static int
-rndr_emphasis(struct buf *ob, struct buf *text, void *opaque)
-{
-	if (!text || !text->size) return 0;
-	BUFPUTSL(ob, "<em>");
-	if (text) bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "</em>");
-	return 1;
+func rndr_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	if len(text) == 0 {
+		return false
+	}
+	ob.WriteString("<em>")
+	ob.Write(text)
+	ob.WriteString("</em>")
+	return true
 }
 
 static void
@@ -489,7 +479,7 @@ rndr_listitem(struct buf *ob, struct buf *text, int flags, void *opaque)
 }
 
 static void
-rndr_paragraph(struct buf *ob, struct buf *text, void *opaque)
+rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{})
 {
 	struct html_renderopt *options = opaque;
 	size_t i = 0;
@@ -531,7 +521,7 @@ rndr_paragraph(struct buf *ob, struct buf *text, void *opaque)
 }
 
 static void
-rndr_raw_block(struct buf *ob, struct buf *text, void *opaque)
+rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{})
 {
 	size_t org, sz;
 	if (!text) return;
@@ -546,7 +536,7 @@ rndr_raw_block(struct buf *ob, struct buf *text, void *opaque)
 }
 
 static int
-rndr_triple_emphasis(struct buf *ob, struct buf *text, void *opaque)
+rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{})
 {
 	if (!text || !text->size) return 0;
 	BUFPUTSL(ob, "<strong><em>");
@@ -555,29 +545,26 @@ rndr_triple_emphasis(struct buf *ob, struct buf *text, void *opaque)
 	return 1;
 }
 
-static void
-rndr_hrule(struct buf *ob, void *opaque)
-{
-	struct html_renderopt *options = opaque;	
+func rndr_hrule(ob *bytes.Buffer, opaque interface{}) {
+	//struct html_renderopt *options = opaque;	
 
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
-	BUFPUTSL(ob, "<hr");
-	bufputs(ob, options->close_tag);
+	ob.WriteString("<hr")
+	//bufputs(ob, options->close_tag);
 }
 
-static int
-rndr_image(struct buf *ob, struct buf *link, struct buf *title, struct buf *alt, void *opaque)
-{
-	struct html_renderopt *options = opaque;	
-	if (!link || !link->size) return 0;
-	BUFPUTSL(ob, "<img src=\"");
-	attr_escape(ob, link->data, link->size);
-	BUFPUTSL(ob, "\" alt=\"");
-	if (alt && alt->size)
-		attr_escape(ob, alt->data, alt->size);
+func rndr_image(ob *bytes.Buffer, link []byte, title []byte, alt []byte, opaque interface{}) bool {
+	//struct html_renderopt *options = opaque;
+	if len(link) == 0 {
+		return false
+	}
+	ob.WriteString("<img src=\"")
+	attr_escape(ob, link)
+	ob.WriteString("\" alt=\"")
+	attr_escape(ob, alt)
 	if (title && title->size) {
 		BUFPUTSL(ob, "\" title=\"");
 		attr_escape(ob, title->data, title->size); }
@@ -588,7 +575,7 @@ rndr_image(struct buf *ob, struct buf *link, struct buf *title, struct buf *alt,
 }
 
 static int
-rndr_linebreak(struct buf *ob, void *opaque)
+rndr_linebreak(ob *bytes.Buffer, opaque interface{})
 {
 	struct html_renderopt *options = opaque;	
 	BUFPUTSL(ob, "<br");
@@ -597,7 +584,7 @@ rndr_linebreak(struct buf *ob, void *opaque)
 }
 
 static int
-rndr_raw_html(struct buf *ob, struct buf *text, void *opaque)
+rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{})
 {
 	struct html_renderopt *options = opaque;	
 
@@ -618,7 +605,7 @@ rndr_raw_html(struct buf *ob, struct buf *text, void *opaque)
 }
 
 static void
-rndr_table(struct buf *ob, struct buf *header, struct buf *body, void *opaque)
+rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{})
 {
 	if (ob->size) bufputc(ob, '\n');
 	BUFPUTSL(ob, "<table><thead>\n");
@@ -631,7 +618,7 @@ rndr_table(struct buf *ob, struct buf *header, struct buf *body, void *opaque)
 }
 
 static void
-rndr_tablerow(struct buf *ob, struct buf *text, void *opaque)
+rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{})
 {
 	if (ob->size) bufputc(ob, '\n');
 	BUFPUTSL(ob, "<tr>\n");
@@ -641,7 +628,7 @@ rndr_tablerow(struct buf *ob, struct buf *text, void *opaque)
 }
 
 static void
-rndr_tablecell(struct buf *ob, struct buf *text, int align, void *opaque)
+rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{})
 {
 	if (ob->size) bufputc(ob, '\n');
 	switch (align) {
@@ -668,14 +655,14 @@ rndr_tablecell(struct buf *ob, struct buf *text, int align, void *opaque)
 }
 
 static void
-rndr_normal_text(struct buf *ob, struct buf *text, void *opaque)
+rndr_normal_text(ob *bytes.Buffer, text []byte, opaque interface{})
 {
 	if (text)
 		attr_escape(ob, text->data, text->size);
 }
 
 static void
-toc_header(struct buf *ob, struct buf *text, int level, void *opaque)
+toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{})
 {
 	struct html_renderopt *options = opaque;
 
@@ -700,7 +687,7 @@ toc_header(struct buf *ob, struct buf *text, int level, void *opaque)
 }
 
 static void
-toc_finalize(struct buf *ob, void *opaque)
+toc_finalize(ob *bytes.Buffer, opaque interface{})
 {
 	struct html_renderopt *options = opaque;
 
