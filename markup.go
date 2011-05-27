@@ -7,6 +7,12 @@ import (
 )
 
 const (
+	MKDA_NOT_AUTOLINK = iota /* used internally when it is not an autolink*/
+	MKDA_NORMAL              /* normal http/http/ftp/mailto/etc link */
+	MKDA_EMAIL               /* e-mail link without explit mailto: */
+)
+
+const (
 	BUFFER_BLOCK = iota
 	BUFFER_SPAN
 )
@@ -179,6 +185,83 @@ func is_mail_autolink(data []byte) int {
 		}
 	}
 	return 0
+}
+
+/* returns the length of the given tag, or 0 is it's not valid */
+func tag_length(data []byte, autolink *int) int {
+	size := len(data)
+	/* a valid tag can't be shorter than 3 chars */
+	if size < 3 {
+		return 0
+	}
+
+	/* begins with a '<' optionally followed by '/', followed by letter or number */
+	if data[0] != '<' {
+		return 0
+	}
+	i := 1
+	if data[1] == '/' {
+		i = 2
+	}
+
+	if !isalnum(data[i]) {
+		return 0
+	}
+
+	/* scheme test */
+	*autolink = MKDA_NOT_AUTOLINK
+
+	/* try to find the beginning of an URI */
+	for i < size && (isalnum(data[i]) || data[i] == '.' || data[i] == '+' || data[i] == '-') {
+		i++
+	}
+
+	if i > 1 && data[i] == '@' {
+		if j := is_mail_autolink(data[i:]); j != 0 {
+			*autolink = MKDA_EMAIL
+			return i + j
+		}
+	}
+
+	if i > 2 && data[i] == ':' {
+		*autolink = MKDA_NORMAL
+		i++
+	}
+
+	/* completing autolink test: no whitespace or ' or " */
+	if i >= size {
+		*autolink = MKDA_NOT_AUTOLINK
+	} else if *autolink == MKDA_NOT_AUTOLINK {
+		j := i
+
+		for i < size {
+			if data[i] == '\\' {
+				i += 2
+			} else if data[i] == '>' || data[i] == '\'' || data[i] == '"' || isspace(data[i]) {
+				break
+			} else {
+				i += 1
+			}
+		}
+
+		if i >= size {
+			return 0
+		}
+		if i > j && data[i] == '>' {
+			return i + 1
+		}
+		/* one of the forbidden chars has been found */
+		*autolink = MKDA_NOT_AUTOLINK
+	}
+
+	/* looking for sometinhg looking like a tag end */
+	for i < size && data[i] != '>' {
+		i += 1
+	}
+	if i >= size {
+		return 0
+	}
+	return i + 1
 }
 
 /* looks for the next emph char, skipping other constructs */

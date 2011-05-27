@@ -6,12 +6,6 @@ import (
 )
 
 const (
-	MKDA_NOT_AUTOLINK = iota /* used internally when it is not an autolink*/
-	MKDA_NORMAL              /* normal http/http/ftp/mailto/etc link */
-	MKDA_EMAIL               /* e-mail link without explit mailto: */
-)
-
-const (
 	MKDEXT_NO_INTRA_EMPHASIS = 1 << 0
 	MKDEXT_TABLES            = 1 << 1
 	MKDEXT_FENCED_CODE       = 1 << 2
