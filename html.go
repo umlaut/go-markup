@@ -378,12 +378,10 @@ func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte) {
 	ob.WriteString("</code></pre>\n")
 }
 
-static void
-rndr_blockquote(struct buf *ob, struct buf *text, void *opaque)
-{
-	BUFPUTSL(ob, "<blockquote>\n");
-	if (text) bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "</blockquote>");
+func rndr_blockquote(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	ob.WriteString("<blockquote>\n")
+	ob.Write(text)
+	ob.WriteString("</blockquote>")
 }
 
 static int
