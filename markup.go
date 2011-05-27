@@ -6,12 +6,6 @@ import (
 	"strings"
 )
 
-// bufType in newBuf() and popBuf()
-const (
-	BUFFER_BLOCK = iota
-	BUFFER_SPAN
-)
-
 var block_tags []string = []string{"p", "dl", "h1", "h2", "h3", "h4", "h5", "h6", "ol", "ul", "del", "div", "ins", "pre", "form", "math", "table", "iframe", "script", "fieldset", "noscript", "blockquote"}
 
 const (
@@ -141,9 +135,11 @@ func find_emph_char(data []byte, c byte) int {
 
 /* parsing single emphase */
 /* closed by a symbol not preceded by whitespace and not followed by symbol */
-func parse_emph1(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int {
-	//TODO:
-	//if (!rndr->make.emphasis) return 0;
+func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
+	if nil == rndr.make.emphasis {
+		return 0
+	}
+
 	size := len(data)
 	i := 0
 
@@ -190,13 +186,19 @@ func parse_emph1(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int 
 }
 
 /* parsing single emphase */
-func parse_emph2(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int {
-	//int (*render_method)(struct buf *ob, struct buf *text, void *opaque);
+func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
+	var render_method rndrBufFunc
 	i := 0
 	size := len(data)
-	//render_method = (c == '~') ? rndr->make.strikethrough : rndr->make.double_emphasis;
-	//if (!render_method)
-	//	return 0;
+	if c == '~' {
+		render_method = rndr.make.strikethrough
+	} else {
+		render_method = rndr.make.double_emphasis
+	}
+
+	if nil == render_method {
+		return 0
+	}
 	
 	for i < size {
 		len := find_emph_char(data[i:], c)
@@ -208,9 +210,7 @@ func parse_emph2(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int 
 		if i + 1 < size && data[i] == c && data[i + 1] == c && i > 0 && !isspace(data[i - 1]) {
 			work := rndr.newBuf(BUFFER_SPAN)
 			parse_inline(work, rndr, data[:i])
-			// TODO: 
-			//r = render_method(ob, work, rndr->make.opaque)
-			r := 0
+			r := render_method(ob, work, rndr.make.opaque)
 			rndr.popBuf(BUFFER_SPAN)
 			if r > 0 {
 				return i + 2
@@ -225,7 +225,7 @@ func parse_emph2(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int 
 
 /* parsing single emphase */
 /* finds the first closing tag, and delegates to the other emph */
-func parse_emph3(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int {
+func parse_emph3(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 	size := len(data)
 	i := 0
 
@@ -241,8 +241,7 @@ func parse_emph3(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int 
 			continue
 		}
 
-		// TODO: only if rndr->make.triple_emphasis
-		if i + 2 < size && data[i + 1] == c && data[i + 2] == c {
+		if i + 2 < size && data[i + 1] == c && data[i + 2] == c && nil != rndr.make.triple_emphasis{
 			/* triple symbol found */
 			work := rndr.newBuf(BUFFER_SPAN)
 
@@ -275,7 +274,7 @@ func parse_emph3(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, c byte) int 
 	return 0
 }
 
-func char_emphasis(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_emphasis(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_emphasis"))
 
 	c := data[0]
@@ -321,49 +320,49 @@ func char_emphasis(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	return 0
 }
 
-func char_linebreak(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_linebreak(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_linebreak"))
 	// TODO: write me
 	return 0
 }
 
-func char_codespan(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_codespan(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_codespan"))
 	// TODO: write me
 	return 0
 }
 
-func char_escape(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_escape(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_escape"))
 	// TODO: write me
 	return 0
 }
 
-func char_entity(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_entity(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_entity"))
 	// TODO: write me
 	return 0
 }
 
-func char_langle_tag(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_langle_tag"))
 	// TODO: write me
 	return 0
 }
 
-func char_autolink(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_autolink(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_autolink"))
 	// TODO: write me
 	return 0
 }
 
-func char_link(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func char_link(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("char_link"))
 	// TODO: write me
 	return 0
 }
 
-type TriggerFunc func(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int
+type TriggerFunc func(ob *bytes.Buffer, rndr *render, data []byte) int
 
 var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, char_emphasis, char_codespan, char_linebreak, char_link, char_langle_tag, char_escape, char_entity, char_autolink}
 
@@ -379,108 +378,6 @@ func writeInTag(ob *bytes.Buffer, text *bytes.Buffer, tag string) {
 	ob.WriteString("</")
 	ob.WriteString(tag)
 	ob.WriteString(">\n")
-}
-
-func (rndr *HtmlRenderer) blockquote(ob *bytes.Buffer, text *bytes.Buffer) {
-	defer un(trace("blockquote"))
-	writeInTag(ob, text, "blockquote")
-	/*	ob.WriteString("<blockquote>\n")
-		if text ! nil {
-			ob.Write(text.Bytes())
-		}
-		ob.WriteString("</blockquote>\n")*/
-}
-
-// this is rndr_raw_block
-func (rndr *HtmlRenderer) blockhtml(ob *bytes.Buffer, text *bytes.Buffer) {
-	defer un(trace("blockhtml"))
-	if nil == text {
-		return
-	}
-	data := text.Bytes()
-	sz := len(data)
-	for sz > 0 && data[sz-1] == '\n' {
-		sz -= 1
-	}
-	org := 0
-	for org < sz && data[org] == '\n' {
-		org += 1
-	}
-	if org >= sz {
-		return
-	}
-	if ob.Len() > 0 {
-		ob.WriteByte('\n')
-	}
-	ob.Write(data[org:])
-	ob.WriteByte('\n')
-}
-
-func (rndr *HtmlRenderer) triple_emphasis(ob *bytes.Buffer, text []byte) {
-	// TODO: write me
-}
-
-func (rndr *HtmlRenderer) normal_text(ob *bytes.Buffer, text *bytes.Buffer) {
-	defer un(trace("normal_text"))
-	if text != nil {
-		attr_escape(ob, text.Bytes())
-	}
-}
-
-func (rndr *HtmlRenderer) blockcode(text, lang string) {
-	defer un(trace("blockcode"))
-
-}
-
-func (rndr *HtmlRenderer) docheader() {
-	defer un(trace("docheader"))
-	// do nothing
-}
-
-// rndr_paragraph
-func (rndr *HtmlRenderer) paragraph(ob *bytes.Buffer, text []byte) {
-	defer un(trace("paragraph", string(text)))
-	//struct html_renderopt *options = opaque;
-	i := 0
-	size := len(text)
-
-	if ob.Len() > 0 {
-		ob.WriteByte('\n')
-	}
-
-	for i < size && isspace(text[i]) {
-		i++
-	}
-
-	if i == size {
-		return
-	}
-
-	ob.WriteString("<p>")
-
-	if rndr.options.HardWrap {
-		for i < size {
-			org := i
-			for i < size && text[i] != '\n' {
-				i++
-			}
-
-			if i > org {
-				ob.Write(text[org:i])
-			}
-
-			if i >= size {
-				break
-			}
-
-			ob.WriteString("<br")
-			ob.WriteString(rndr.closeTag)
-			i++
-		}
-	} else {
-		ob.Write(text[i:])
-	}
-	ob.WriteString("</p>\n")
 }
 
 // Returns whether a line is a reference or not
@@ -653,7 +550,7 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 	}
 }
 
-func is_atxheader(rndr *HtmlRenderer, data []byte) bool {
+func is_atxheader(rndr *render, data []byte) bool {
 	defer un(trace("is_atxheader"))
 	if data[0] != '#' {
 		return false
@@ -707,7 +604,7 @@ func is_headerline(data []byte) int {
 	}
 	return 0
 }
-func parse_atxheader(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_atxheader"))
 	// TODO: implement me
 	return 0
@@ -758,13 +655,13 @@ func is_hrule(data []byte) bool {
 	return n >= 3
 }
 
-func parse_fencedcode(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_fencedcode"))
 	// TODO: write me
 	return 0
 }
 
-func parse_table(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_table"))
 	// TODO: write me
 	return 0
@@ -795,14 +692,14 @@ func prefix_quote(data []byte) int {
 
 // checking end of HTML block : </tag>[ \t]*\n[ \t*]\n
 //	returns the length on match, 0 otherwise
-func htmlblock_end(tag string, rndr *HtmlRenderer, data []byte) int {
+func htmlblock_end(tag string, rndr *render, data []byte) int {
 	defer un(trace("htmlblock_end"))
 	// TODO: write me
 	return 0
 }
 
 /* handles parsing of a blockquote fragment */
-func parse_blockquote(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func parse_blockquote(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_blockquote"))
 	size := len(data)
 	work_data := make([]byte, 0, len(data))
@@ -856,7 +753,7 @@ func find_block_tag(data []byte) string {
 }
 
 /* parses inline markdown elements */
-func parse_inline(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) {
+func parse_inline(ob *bytes.Buffer, rndr *render, data []byte) {
 	defer un(trace("parse_inline"))
 	i := 0
 	end := 0
@@ -870,7 +767,7 @@ func parse_inline(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) {
 	for i < size {
 		/* copying inactive chars into the output */
 		for end < size {
-			action = rndr.activeChar[data[end]]
+			action = rndr.active_char[data[end]]
 			if action != 0 {
 				break
 			}
@@ -899,7 +796,7 @@ func parse_inline(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) {
 	}
 }
 /* parsing of inline HTML block */
-func parse_htmlblock(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, do_render bool) int {
+func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool) int {
 	defer un(trace("parse_htmlblock"))
 	i := 0
 	j := 0
@@ -1008,7 +905,7 @@ func parse_htmlblock(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte, do_rende
 }
 
 /* handles parsing of a regular paragraph */
-func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
+func parse_paragraph(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_paragraph"))
 
 	//struct buf work = { data, 0, 0, 0, 0 }; /* volatile working buffer */
@@ -1061,7 +958,7 @@ func parse_paragraph(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) int {
 	return end
 }
 
-func parse_block(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) {
+func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
 	defer un(trace("parse_block"))
 	//fmt.Printf("parse_block:\n%s\n", string(data))
 	beg := 0
@@ -1121,10 +1018,56 @@ func parse_block(ob *bytes.Buffer, rndr *HtmlRenderer, data []byte) {
 	}
 }
 
+func ups_markdown_init(r *render, extensions uint) {
+	defer un(trace("ups_markdown_init"))
+
+	if nil != r.make.emphasis || nil != rndrr.make.double_emphasis || nil != r.make.triple_emphasis {
+		r.active_char['*'] = MD_CHAR_EMPHASIS
+		r.active_char['_'] = MD_CHAR_EMPHASIS
+		if extensions & MKDEXT_STRIKETHROUGH != 0 {
+			r.active_char['~'] = MD_CHAR_EMPHASIS
+		}
+	}
+
+	if r.make.codespan != nil {
+		r.active_char['`'] = MD_CHAR_CODESPAN
+	}
+
+	if r.make.linebreak != nil {
+		r.active_char['\n'] = MD_CHAR_LINEBREAK
+	}
+
+	if nil != r.make.image || nil != r.make.link {
+		r.active_char['['] = MD_CHAR_LINK
+	}
+
+	r.active_char['<'] = MD_CHAR_LANGLE
+	r.active_char['\\'] = MD_CHAR_ESCAPE
+	r.active_char['&'] = MD_CHAR_ENTITITY
+
+	if extensions & MKDEXT_AUTOLINK != 0 {
+		r.active_char['h'] = MD_CHAR_AUTOLINK // http, https
+		r.active_char['H'] = MD_CHAR_AUTOLINK
+
+		r.active_char['f'] = MD_CHAR_AUTOLINK // ftp
+		r.active_char['F'] = MD_CHAR_AUTOLINK
+
+		r.active_char['m'] = MD_CHAR_AUTOLINK // mailto
+		r.active_char['M'] = MD_CHAR_AUTOLINK
+	}
+	r.refs = make([]*LinkRef, 16)
+
+	r.ext_flags = extensions
+	r.max_nesting = 16
+	return r
+}
+
 // TODO: a big change would be to use slices more directly rather than pass indexes
-func MarkdownToHtml(s string, options *MarkdownOptions) string {
+func MarkdownToHtml(s string, options uint) string {
 	defer un(trace("MarkdownToHtml"))
-	rndr := newHtmlRenderer(options)
+	rndr := upshtml_renderer(options)
+	ups_markdown_init(rndr, 0)
+
 	ib := []byte(s)
 	ob := new(bytes.Buffer)
 	text := new(bytes.Buffer)

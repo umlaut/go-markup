@@ -59,6 +59,10 @@ const (
 )
 
 const (
+	BUFFER_BLOCK = iota
+	BUFFER_SPAN
+)
+const (
 	xhtml_close = "/>\n"
 	html_close  = ">\n"
 )
@@ -124,16 +128,15 @@ type mkd_renderer struct {
 }
 
 type render struct {
-	make mkd_renderer
-	refs       []*LinkRef
+	make 		mkd_renderer
+	refs       	[]*LinkRef
 	active_char [256]byte
-	work_bufs [2][]*bytes.Buffer
-
-	/*block_bufs  []*bytes.Buffer
-	span_bufs   []*bytes.Buffer*/
+	work_bufs 	[2][]*bytes.Buffer // indexed by BUFFER_BLOCK or BUFFER_SPAN
+	ext_flags   uint
 	max_nesting int
 }
 
+/*
 type MarkdownOptions struct {
 	SkipHtml        bool
 	SkipStyle       bool
@@ -163,6 +166,7 @@ type HtmlRenderer struct {
 	spanBufs   []*bytes.Buffer
 	maxNesting int
 }
+*/
 
 // TODO: what other chars are space?
 func isspace(c byte) bool {
@@ -188,47 +192,25 @@ func isalnum(c byte) bool {
 	return c >= 'a' && c <= 'z'
 }
 
-/* 
-func newHtmlRenderer(options *MarkdownOptions) *HtmlRenderer {
-	defer un(trace("newHtmlRenderer"))
+func (rndr *render) newBuf(bufType int) (buf *bytes.Buffer) {
+	defer un(trace("newBuf"))
 
-	if options == nil {
-		options = new(MarkdownOptions)
-	}
-	r := &HtmlRenderer{options: options}
-	r.closeTag = htmlClose
-	if options.Xhtml {
-		r.closeTag = xhtmlClose
-	}
-	r.activeChar['*'] = MD_CHAR_EMPHASIS
-	r.activeChar['_'] = MD_CHAR_EMPHASIS
-	if options.ExtStrikeThrough {
-		r.activeChar['~'] = MD_CHAR_EMPHASIS
-	}
-	r.activeChar['`'] = MD_CHAR_CODESPAN
-	r.activeChar['\n'] = MD_CHAR_LINEBREAK
-	r.activeChar['['] = MD_CHAR_LINK
-
-	r.activeChar['<'] = MD_CHAR_LANGLE
-	r.activeChar['\\'] = MD_CHAR_ESCAPE
-	r.activeChar['&'] = MD_CHAR_ENTITITY
-
-	if options.ExtAutoLink {
-		r.activeChar['h'] = MD_CHAR_AUTOLINK // http, https
-		r.activeChar['H'] = MD_CHAR_AUTOLINK
-
-		r.activeChar['f'] = MD_CHAR_AUTOLINK // ftp
-		r.activeChar['F'] = MD_CHAR_AUTOLINK
-
-		r.activeChar['m'] = MD_CHAR_AUTOLINK // mailto
-		r.activeChar['M'] = MD_CHAR_AUTOLINK
-	}
-	r.refs = make([]*LinkRef, 16)
-	r.maxNesting = 16
-	return r
+	buf = new(bytes.Buffer)
+	rndr.work_bufs[bufType] = append(rndr.work_bufs[bufType], buf)
+	return buf
 }
-*/
 
+func (rndr *render) popBuf(bufType int) {
+	defer un(trace("popBuf"))
+	rndr.work_bufs[bufType] = rndr.work_bufs[bufType][0 : len(rndr.work_bufs[bufType])-1]
+}
+
+func (rndr *render) reachedNestingLimit() bool {
+	defer un(trace("reachedNestingLimit"))
+	return len(rndr.work_bufs[0])+len(rndr.work_bufs[1]) > rndr.max_nesting
+}
+
+/*
 func (rndr *HtmlRenderer) newBuf(bufType int) (buf *bytes.Buffer) {
 	defer un(trace("newBuf"))
 
@@ -239,8 +221,9 @@ func (rndr *HtmlRenderer) newBuf(bufType int) (buf *bytes.Buffer) {
 		rndr.spanBufs = append(rndr.spanBufs, buf)
 	}
 	return
-}
+}*/
 
+/*
 func (rndr *HtmlRenderer) popBuf(bufType int) {
 	defer un(trace("popBuf"))
 	if BUFFER_BLOCK == bufType {
@@ -248,12 +231,13 @@ func (rndr *HtmlRenderer) popBuf(bufType int) {
 	} else {
 		rndr.spanBufs = rndr.spanBufs[0 : len(rndr.spanBufs)-1]
 	}
-}
+}*/
 
+/*
 func (rndr *HtmlRenderer) reachedNestingLimit() bool {
 	defer un(trace("reachedNestingLimit"))
 	return len(rndr.blockBufs)+len(rndr.spanBufs) > rndr.maxNesting
-}
+}*/
 
 func put_scaped_char(ob *bytes.Buffer, c byte) {
 	switch {
