@@ -105,6 +105,22 @@ type mkd_renderer struct {
 	opaque interface{}
 }
 
+/*
+// writes '<${tag}>\n${text}</${tag}\n' ot "ob"
+func writeInTag(ob *bytes.Buffer, text *bytes.Buffer, tag string) {
+	//defer un(trace("writeInTag"))
+	ob.WriteString("<")
+	ob.WriteString(tag)
+	ob.WriteString(">\n")
+	if text != nil {
+		ob.Write(text.Bytes())
+	}
+	ob.WriteString("</")
+	ob.WriteString(tag)
+	ob.WriteString(">\n")
+}*/
+
+
 // TODO: what other chars are space?
 func isspace(c byte) bool {
 	return c == ' '

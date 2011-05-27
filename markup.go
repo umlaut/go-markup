@@ -38,7 +38,7 @@ const (
 	MD_CHAR_AUTOLINK
 )
 
-type TriggerFunc func(ob *bytes.Buffer, rndr *render, data []byte) int
+type TriggerFunc func(ob *bytes.Buffer, rndr *render, data []byte, offset int) int
 
 var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, char_emphasis, char_codespan, char_linebreak, char_link, char_langle_tag, char_escape, char_entity, char_autolink}
 
@@ -264,6 +264,54 @@ func tag_length(data []byte, autolink *int) int {
 	return i + 1
 }
 
+/* parses inline markdown elements */
+func parse_inline(ob *bytes.Buffer, rndr *render, data []byte) {
+	defer un(trace("parse_inline"))
+
+	size := len(data)
+
+	if rndr.reachedNestingLimit() {
+		return
+	}
+
+	var action byte = 0
+	i := 0
+	end := 0
+	for i < size {
+		/* copying inactive chars into the output */
+		for end < size {
+			action = rndr.active_char[data[end]]
+			if action != 0 {
+				break
+			}
+			end++
+		}
+
+		if rndr.make.normal_text != nil {
+			work_data := data[i:end]
+			rndr.make.normal_text(ob, work_data, rndr.make.opaque)			
+		} else {
+			ob.Write(data[i:end])
+		}
+
+		if end >= size {
+			break
+		}
+		i = end
+
+		/* calling the trigger */
+		actfunc := markdown_char_ptrs[action]
+		end = actfunc(ob, rndr, data[i:], i)
+		if 0 == end {
+			/* no action from the callback */
+			end = i + 1
+		} else {
+			i += end
+			end = i
+		}
+	}
+}
+
 /* looks for the next emph char, skipping other constructs */
 func find_emph_char(data []byte, c byte) int {
 	size := len(data)
@@ -480,7 +528,7 @@ func parse_emph3(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 	return 0
 }
 
-func char_emphasis(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_emphasis(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_emphasis"))
 
 	c := data[0]
@@ -526,60 +574,46 @@ func char_emphasis(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return 0
 }
 
-func char_linebreak(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_linebreak(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_linebreak"))
 	// TODO: write me
 	return 0
 }
 
-func char_codespan(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_codespan(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_codespan"))
 	// TODO: write me
 	return 0
 }
 
-func char_escape(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_escape(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_escape"))
 	// TODO: write me
 	return 0
 }
 
-func char_entity(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_entity(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_entity"))
 	// TODO: write me
 	return 0
 }
 
-func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_langle_tag"))
 	// TODO: write me
 	return 0
 }
 
-func char_autolink(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_autolink"))
 	// TODO: write me
 	return 0
 }
 
-func char_link(ob *bytes.Buffer, rndr *render, data []byte) int {
+func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_link"))
 	// TODO: write me
 	return 0
-}
-
-// writes '<${tag}>\n${text}</${tag}\n' ot "ob"
-func writeInTag(ob *bytes.Buffer, text *bytes.Buffer, tag string) {
-	//defer un(trace("writeInTag"))
-	ob.WriteString("<")
-	ob.WriteString(tag)
-	ob.WriteString(">\n")
-	if text != nil {
-		ob.Write(text.Bytes())
-	}
-	ob.WriteString("</")
-	ob.WriteString(tag)
-	ob.WriteString(">\n")
 }
 
 // Returns whether a line is a reference or not
@@ -932,49 +966,6 @@ func parse_blockquote(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return end
 }
 
-/* parses inline markdown elements */
-func parse_inline(ob *bytes.Buffer, rndr *render, data []byte) {
-	defer un(trace("parse_inline"))
-	i := 0
-	end := 0
-	size := len(data)
-
-	if rndr.reachedNestingLimit() {
-		return
-	}
-
-	var action byte = 0
-	for i < size {
-		/* copying inactive chars into the output */
-		for end < size {
-			action = rndr.active_char[data[end]]
-			if action != 0 {
-				break
-			}
-			end++
-		}
-
-		work_data := data[i:]
-		rndr.normal_text(ob, bytes.NewBuffer(work_data))
-
-		if end >= size {
-			break
-		}
-		i = end
-
-		/* calling the trigger */
-		f := markdown_char_ptrs[action]
-		//end = f(ob, rndr, data + i, i, size - i)
-		end = f(ob, rndr, data[i:])
-		if 0 == end {
-			/* no action from the callback */
-			end = i + 1
-		} else {
-			i += end
-			end = i
-		}
-	}
-}
 /* parsing of inline HTML block */
 func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool) int {
 	defer un(trace("parse_htmlblock"))
