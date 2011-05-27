@@ -390,6 +390,7 @@ func find_emph_char(data []byte, c byte) int {
 /* parsing single emphase */
 /* closed by a symbol not preceded by whitespace and not followed by symbol */
 func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
+
 	if nil == rndr.make.emphasis {
 		return 0
 	}
@@ -418,17 +419,17 @@ func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 		}
 
 		if data[i] == c && !isspace(data[i - 1]) {
-			if rndr.options.ExtNoIntraEmphasis {
+			if rndr.ext_flags & MKDEXT_NO_INTRA_EMPHASIS != 0 {
 				if !(i + 1 == size || isspace(data[i + 1]) || ispunct(data[i + 1])) {
 					continue
 				}
 			}
 
-			work := rndr.newBuf(BUFFER_SPAN)
+			work := rndr.newbuf(BUFFER_SPAN)
 			parse_inline(work, rndr, data[:i])
-			r := emphasis(ob, work)
-			rndr.popBuf(BUFFER_SPAN)
-			if r > 0 {
+			r := rndr.make.emphasis(ob, work.Bytes(), rndr.make.opaque)
+			rndr.popbuf(BUFFER_SPAN)
+			if r {
 				return i + 1
 			} else {
 				return 0
