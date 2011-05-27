@@ -471,15 +471,14 @@ func rndr_list(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
 	}
 }
 
-static void
-rndr_listitem(ob *bytes.Buffer, text []byte, flags int, opaque interface{})
-{
-	BUFPUTSL(ob, "<li>");
-	if (text) {
-		while (text->size && text->data[text->size - 1] == '\n')
-			text->size -= 1;
-		bufput(ob, text->data, text->size); }
-	BUFPUTSL(ob, "</li>\n");
+func rndr_listitem(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
+	ob.WriteString("<li>")
+	i := len(text)
+	for i > 0 && text[i-1] == '\n' {
+		i--
+	}
+	ob.Write(text[:i])
+	ob.WriteString("</li>\n")
 }
 
 static void
@@ -578,13 +577,11 @@ func rndr_image(ob *bytes.Buffer, link []byte, title []byte, alt []byte, opaque 
 	return 1;
 }
 
-static int
-rndr_linebreak(ob *bytes.Buffer, opaque interface{})
-{
-	struct html_renderopt *options = opaque;	
-	BUFPUTSL(ob, "<br");
-	bufputs(ob, options->close_tag);
-	return 1;
+func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
+	//struct html_renderopt *options = opaque;
+	ob.WriteString("<br")
+	//bufputs(ob, options->close_tag);
+	return true
 }
 
 static int
