@@ -125,6 +125,62 @@ func unscape_text(ob *bytes.Buffer, src []byte) {
 	}
 }
 
+/* returns the current block tag */
+/* TODO: speed it up by auto-generated optimized 
+   comparison function that is a chain of ifs */
+func find_block_tag(data []byte) string {
+	defer un(trace("find_block_tag"))
+	i := 0
+	size := len(data)
+
+	/* looking for the word end */
+	for i < size && isalnum(data[i]) {
+		i++
+	}
+	if i == 0 || i >= size {
+		return ""
+	}
+	s := strings.ToLower(string(data[:i]))
+	for _, tag := range block_tags {
+		if s == tag {
+			return s
+		}
+	}
+	return ""
+}
+
+/****************************
+ * INLINE PARSING FUNCTIONS *
+ ****************************/
+
+/* looks for the address part of a mail autolink and '>' */
+/* this is less strict than the original markdown e-mail address matching */
+func is_mail_autolink(data []byte) int {
+	size := len(data)
+	nb := 0
+
+	/* address is assumed to be: [-@._a-zA-Z0-9]+ with exactly one '@' */
+	for i := 0; i < size; i++ {
+		if isalnum(data[i]) {
+			continue
+		}
+		c := data[i]
+		if c == '@' {
+			nb++
+		} else if c == '-' || c == '.' || c == '_' {
+			// do nothing
+		} else if c == '>' {
+			if nb == 1 {
+				return i + 1
+			}
+			return 0
+		} else {
+			return 0
+		}
+	}
+	return 0
+}
+
 /* looks for the next emph char, skipping other constructs */
 func find_emph_char(data []byte, c byte) int {
 	size := len(data)
@@ -791,28 +847,6 @@ func parse_blockquote(ob *bytes.Buffer, rndr *render, data []byte) int {
 	rndr.blockquote(ob, out)
 	rndr.popBuf(BUFFER_BLOCK)
 	return end
-}
-
-/* returns the current block tag */
-func find_block_tag(data []byte) string {
-	defer un(trace("find_block_tag"))
-	i := 0
-	size := len(data)
-
-	/* looking for the word end */
-	for i < size && isalnum(data[i]) {
-		i++
-	}
-	if i == 0 || i >= size {
-		return ""
-	}
-	s := strings.ToLower(string(data[:i]))
-	for _, tag := range block_tags {
-		if s == tag {
-			return s
-		}
-	}
-	return ""
 }
 
 /* parses inline markdown elements */
