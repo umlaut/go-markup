@@ -246,7 +246,7 @@ func is_html_tag(tag []byte, tagname []byte) bool {
 /********************
  * GENERIC RENDERER *
  ********************/
-func rndr_autolink(ob *bytes.Buffer, link []byte, typ int) bool {
+func rndr_autolink(ob *bytes.Buffer, link []byte, typ int, opaque interface{}) bool {
 	//struct html_renderopt *options = opaque;
 
 	size := len(link)
@@ -285,7 +285,7 @@ func rndr_autolink(ob *bytes.Buffer, link []byte, typ int) bool {
 }
 
 func rndr_blockcode(ob *bytes.Buffer, text []byte, lang []byte) {
-	if ob.Len() == 0 {
+	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
@@ -327,3 +327,391 @@ func rndr_blockcode(ob *bytes.Buffer, text []byte, lang []byte) {
 	}
 	ob.WriteString("</code></pre>\n")
 }
+
+/*
+ * GitHub style code block:
+ *
+ *		<pre lang="LANG"><code>
+ *		...
+ *		</pre></code>
+ *
+ * Unlike other parsers, we store the language identifier in the <pre>,
+ * and don't let the user generate custom classes.
+ *
+ * The language identifier in the <pre> block gets postprocessed and all
+ * the code inside gets syntax highlighted with Pygments. This is much safer
+ * than letting the user specify a CSS class for highlighting.
+ *
+ * Note that we only generate HTML for the first specifier.
+ * E.g.
+ *		~~~~ {.python .numbered}	=>	<pre lang="python"><code>
+ */
+func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte) {
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
+
+	if len(lang) > 0 {
+		i := 0;
+		ob.WriteString("<pre lang=\"")
+
+		for i < len(lang) && !isspace(lang[i]) {
+			i++
+		}
+
+		if lang[0] == '.' {
+			attr_escape(ob, lang[1:i])
+			// Note: hopefully correctly translated
+			// attr_escape(ob, lang->data + 1, i - 1)
+		} else {
+			attr_escape(ob, lang[:i])
+		}
+
+		ob.WriteString("\"><code>")
+	} else {
+		ob.WriteString("<pre><code>")
+	}
+	if len(text > 0) {
+		attr_escape(ob, text)
+	}
+
+	ob.WriteString("</code></pre>\n")
+}
+
+static void
+rndr_blockquote(struct buf *ob, struct buf *text, void *opaque)
+{
+	BUFPUTSL(ob, "<blockquote>\n");
+	if (text) bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "</blockquote>");
+}
+
+static int
+rndr_codespan(struct buf *ob, struct buf *text, void *opaque)
+{
+	BUFPUTSL(ob, "<code>");
+	if (text) attr_escape(ob, text->data, text->size);
+	BUFPUTSL(ob, "</code>");
+	return 1;
+}
+
+static int
+rndr_strikethrough(struct buf *ob, struct buf *text, void *opaque)
+{
+	if (!text || !text->size)
+		return 0;
+
+	BUFPUTSL(ob, "<del>");
+	bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "</del>");
+	return 1;
+}
+
+static int
+rndr_double_emphasis(struct buf *ob, struct buf *text, void *opaque)
+{
+	if (!text || !text->size)
+		return 0;
+
+	BUFPUTSL(ob, "<strong>");
+	bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "</strong>");
+
+	return 1;
+}
+
+static int
+rndr_emphasis(struct buf *ob, struct buf *text, void *opaque)
+{
+	if (!text || !text->size) return 0;
+	BUFPUTSL(ob, "<em>");
+	if (text) bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "</em>");
+	return 1;
+}
+
+static void
+rndr_header(struct buf *ob, struct buf *text, int level, interface opaque)
+{
+	struct html_renderopt *options = opaque;
+	
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
+
+	if (options->flags & HTML_TOC)
+		bufprintf(ob, "<h%d id=\"toc_%d\">", level, options->toc_data.header_count++);
+	else
+		bufprintf(ob, "<h%d>", level);
+
+	if (text) bufput(ob, text->data, text->size);
+	bufprintf(ob, "</h%d>\n", level);
+}
+
+static int
+rndr_link(struct buf *ob, struct buf *link, struct buf *title, struct buf *content, void *opaque)
+{
+	struct html_renderopt *options = opaque;
+	
+	if ((options->flags & HTML_SAFELINK) != 0 && !is_safe_link(link->data, link->size))
+		return 0;
+
+	BUFPUTSL(ob, "<a href=\"");
+	if (link && link->size) bufput(ob, link->data, link->size);
+	if (title && title->size) {
+		BUFPUTSL(ob, "\" title=\"");
+		attr_escape(ob, title->data, title->size); }
+	BUFPUTSL(ob, "\">");
+	if (content && content->size) bufput(ob, content->data, content->size);
+	BUFPUTSL(ob, "</a>");
+	return 1;
+}
+
+static void
+rndr_list(struct buf *ob, struct buf *text, int flags, void *opaque)
+{
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
+
+	bufput(ob, flags & MKD_LIST_ORDERED ? "<ol>\n" : "<ul>\n", 5);
+	if (text) bufput(ob, text->data, text->size);
+	bufput(ob, flags & MKD_LIST_ORDERED ? "</ol>\n" : "</ul>\n", 6);
+}
+
+static void
+rndr_listitem(struct buf *ob, struct buf *text, int flags, void *opaque)
+{
+	BUFPUTSL(ob, "<li>");
+	if (text) {
+		while (text->size && text->data[text->size - 1] == '\n')
+			text->size -= 1;
+		bufput(ob, text->data, text->size); }
+	BUFPUTSL(ob, "</li>\n");
+}
+
+static void
+rndr_paragraph(struct buf *ob, struct buf *text, void *opaque)
+{
+	struct html_renderopt *options = opaque;
+	size_t i = 0;
+
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
+
+	if (!text || !text->size)
+		return;
+
+	while (i < text->size && isspace(text->data[i])) i++;
+
+	if (i == text->size)
+		return;
+
+	BUFPUTSL(ob, "<p>");
+	if (options->flags & HTML_HARD_WRAP) {
+		size_t org;
+		while (i < text->size) {
+			org = i;
+			while (i < text->size && text->data[i] != '\n')
+				i++;
+
+			if (i > org)
+				bufput(ob, text->data + org, i - org);
+
+			if (i >= text->size)
+				break;
+
+			BUFPUTSL(ob, "<br");
+			bufputs(ob, options->close_tag);
+			i++;
+		}
+	} else {
+		bufput(ob, &text->data[i], text->size - i);
+	}
+	BUFPUTSL(ob, "</p>\n");
+}
+
+static void
+rndr_raw_block(struct buf *ob, struct buf *text, void *opaque)
+{
+	size_t org, sz;
+	if (!text) return;
+	sz = text->size;
+	while (sz > 0 && text->data[sz - 1] == '\n') sz -= 1;
+	org = 0;
+	while (org < sz && text->data[org] == '\n') org += 1;
+	if (org >= sz) return;
+	if (ob->size) bufputc(ob, '\n');
+	bufput(ob, text->data + org, sz - org);
+	bufputc(ob, '\n');
+}
+
+static int
+rndr_triple_emphasis(struct buf *ob, struct buf *text, void *opaque)
+{
+	if (!text || !text->size) return 0;
+	BUFPUTSL(ob, "<strong><em>");
+	bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "</em></strong>");
+	return 1;
+}
+
+static void
+rndr_hrule(struct buf *ob, void *opaque)
+{
+	struct html_renderopt *options = opaque;	
+
+	if ob.Len() > 0 {
+		ob.WriteByte('\n')
+	}
+
+	BUFPUTSL(ob, "<hr");
+	bufputs(ob, options->close_tag);
+}
+
+static int
+rndr_image(struct buf *ob, struct buf *link, struct buf *title, struct buf *alt, void *opaque)
+{
+	struct html_renderopt *options = opaque;	
+	if (!link || !link->size) return 0;
+	BUFPUTSL(ob, "<img src=\"");
+	attr_escape(ob, link->data, link->size);
+	BUFPUTSL(ob, "\" alt=\"");
+	if (alt && alt->size)
+		attr_escape(ob, alt->data, alt->size);
+	if (title && title->size) {
+		BUFPUTSL(ob, "\" title=\"");
+		attr_escape(ob, title->data, title->size); }
+
+	bufputc(ob, '"');
+	bufputs(ob, options->close_tag);
+	return 1;
+}
+
+static int
+rndr_linebreak(struct buf *ob, void *opaque)
+{
+	struct html_renderopt *options = opaque;	
+	BUFPUTSL(ob, "<br");
+	bufputs(ob, options->close_tag);
+	return 1;
+}
+
+static int
+rndr_raw_html(struct buf *ob, struct buf *text, void *opaque)
+{
+	struct html_renderopt *options = opaque;	
+
+	if ((options->flags & HTML_SKIP_HTML) != 0)
+		return 1;
+
+	if ((options->flags & HTML_SKIP_STYLE) != 0 && is_html_tag(text, "style"))
+		return 1;
+
+	if ((options->flags & HTML_SKIP_LINKS) != 0 && is_html_tag(text, "a"))
+		return 1;
+
+	if ((options->flags & HTML_SKIP_IMAGES) != 0 && is_html_tag(text, "img"))
+		return 1;
+
+	bufput(ob, text->data, text->size);
+	return 1;
+}
+
+static void
+rndr_table(struct buf *ob, struct buf *header, struct buf *body, void *opaque)
+{
+	if (ob->size) bufputc(ob, '\n');
+	BUFPUTSL(ob, "<table><thead>\n");
+	if (header)
+		bufput(ob, header->data, header->size);
+	BUFPUTSL(ob, "\n</thead><tbody>\n");
+	if (body)
+		bufput(ob, body->data, body->size);
+	BUFPUTSL(ob, "\n</tbody></table>");
+}
+
+static void
+rndr_tablerow(struct buf *ob, struct buf *text, void *opaque)
+{
+	if (ob->size) bufputc(ob, '\n');
+	BUFPUTSL(ob, "<tr>\n");
+	if (text)
+		bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "\n</tr>");
+}
+
+static void
+rndr_tablecell(struct buf *ob, struct buf *text, int align, void *opaque)
+{
+	if (ob->size) bufputc(ob, '\n');
+	switch (align) {
+	case MKD_TABLE_ALIGN_L:
+		BUFPUTSL(ob, "<td align=\"left\">");
+		break;
+
+	case MKD_TABLE_ALIGN_R:
+		BUFPUTSL(ob, "<td align=\"right\">");
+		break;
+
+	case MKD_TABLE_ALIGN_CENTER:
+		BUFPUTSL(ob, "<td align=\"center\">");
+		break;
+
+	default:
+		BUFPUTSL(ob, "<td>");
+		break;
+	}
+
+	if (text)
+		bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "</td>");
+}
+
+static void
+rndr_normal_text(struct buf *ob, struct buf *text, void *opaque)
+{
+	if (text)
+		attr_escape(ob, text->data, text->size);
+}
+
+static void
+toc_header(struct buf *ob, struct buf *text, int level, void *opaque)
+{
+	struct html_renderopt *options = opaque;
+
+	while (level > options->toc_data.current_level) {
+		if (options->toc_data.current_level > 0)
+			BUFPUTSL(ob, "<li>");
+		BUFPUTSL(ob, "<ul>\n");
+		options->toc_data.current_level++;
+	}
+
+	while (level < options->toc_data.current_level) {
+		BUFPUTSL(ob, "</ul>");
+		if (options->toc_data.current_level > 1)
+			BUFPUTSL(ob, "</li>\n");
+		options->toc_data.current_level--;
+	}
+
+	bufprintf(ob, "<li><a href=\"#toc_%d\">", options->toc_data.header_count++);
+	if (text)
+		bufput(ob, text->data, text->size);
+	BUFPUTSL(ob, "</a></li>\n");
+}
+
+static void
+toc_finalize(struct buf *ob, void *opaque)
+{
+	struct html_renderopt *options = opaque;
+
+	while (options->toc_data.current_level > 1) {
+		BUFPUTSL(ob, "</ul></li>\n");
+		options->toc_data.current_level--;
+	}
+
+	if (options->toc_data.current_level)
+		BUFPUTSL(ob, "</ul>\n");
+}
+
