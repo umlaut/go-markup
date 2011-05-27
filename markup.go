@@ -443,7 +443,7 @@ func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 /* parsing single emphase */
 func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 	var render_method rndrBufFunc_b
-	i := 0
+
 	size := len(data)
 	if c == '~' {
 		render_method = rndr.make.strikethrough
@@ -455,7 +455,7 @@ func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 		return 0
 	}
 	
-	for i < size {
+	for i := 0; i < size; i++ {
 		len := find_emph_char(data[i:], c)
 		if 0 == len {
 			return 0
@@ -480,7 +480,9 @@ func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 
 /* parsing single emphase */
 /* finds the first closing tag, and delegates to the other emph */
-func parse_emph3(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
+func parse_emph3(ob *bytes.Buffer, rndr *render, dataorig []byte, iorig int, c byte) int {
+
+	data := dataorig[iorig:]
 	size := len(data)
 	i := 0
 
@@ -498,19 +500,18 @@ func parse_emph3(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 
 		if i + 2 < size && data[i + 1] == c && data[i + 2] == c && nil != rndr.make.triple_emphasis{
 			/* triple symbol found */
-			work := rndr.newBuf(BUFFER_SPAN)
-
+			work := rndr.newbuf(BUFFER_SPAN)
 			parse_inline(work, rndr, data[:i])
-			r := triple_emphasis(ob, work)
-			rndr.popBuf(BUFFER_SPAN)
-			if 0 == r {
+			r := rndr.make.triple_emphasis(ob, work.Bytes(), rndr.make.opaque)
+			rndr.popbuf(BUFFER_SPAN)
+			if r {
 				return i + 3
 			} else {
 				return 0
 			}
 		} else if i + 1 < size && data[i + 1] == c {
 			/* double symbol found, handing over to emph1 */
-			//TODO: len = parse_emph1(ob, rndr, data - 2, size + 2, c);
+			len = parse_emph1(ob, rndr, dataorig[iorig-2:], c);
 			if 0 == len {
 				return 0
 			} else {
@@ -518,7 +519,7 @@ func parse_emph3(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 			}
 		} else {
 			/* single symbol found, handing over to emph2 */
-			//TODO: len = parse_emph2(ob, rndr, data - 1, size + 1, c);
+			len = parse_emph2(ob, rndr, dataorig[iorig-1:], c);
 			if 0 == len {
 				return 0
 			} else {
@@ -559,18 +560,18 @@ func char_emphasis(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 			return 0
 		}
 
-		return ret + 2;
+		return ret + 2
 	}
 
 	if size > 4 && data[1] == c && data[2] == c && data[3] != c {
 		if c == '~' || isspace(data[3]) {
 			return 0
 		}
-		if ret = parse_emph3(ob, rndr, data[3:], c); ret == 0 {
+		if ret = parse_emph3(ob, rndr, data, 3, c); ret == 0 {
 			return 0
 		}
 
-		return ret + 3;
+		return ret + 3
 	}
 	return 0
 }
