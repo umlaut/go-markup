@@ -22,18 +22,6 @@ const (
 )
 
 const (
-	MD_CHAR_NONE = iota
-	MD_CHAR_EMPHASIS
-	MD_CHAR_CODESPAN
-	MD_CHAR_LINEBREAK
-	MD_CHAR_LINK
-	MD_CHAR_LANGLE
-	MD_CHAR_ESCAPE
-	MD_CHAR_ENTITITY
-	MD_CHAR_AUTOLINK
-)
-
-const (
 	HTML_SKIP_HTML        = 1 << 0
 	HTML_SKIP_STYLE       = 1 << 1
 	HTML_SKIP_IMAGES      = 1 << 2
@@ -58,10 +46,6 @@ const (
 	MKD_TABLE_ALIGN_CENTER = MKD_TABLE_ALIGN_L | MKD_TABLE_ALIGN_R
 )
 
-const (
-	BUFFER_BLOCK = iota
-	BUFFER_SPAN
-)
 const (
 	xhtml_close = "/>\n"
 	html_close  = ">\n"
@@ -127,47 +111,6 @@ type mkd_renderer struct {
 	opaque interface{}
 }
 
-type render struct {
-	make 		mkd_renderer
-	refs       	[]*LinkRef
-	active_char [256]byte
-	work_bufs 	[2][]*bytes.Buffer // indexed by BUFFER_BLOCK or BUFFER_SPAN
-	ext_flags   uint
-	max_nesting int
-}
-
-/*
-type MarkdownOptions struct {
-	SkipHtml        bool
-	SkipStyle       bool
-	SkipImages      bool
-	SkipLinks       bool
-	ExpandTabs      bool
-	SafeLink        bool
-	HardWrap        bool
-	GitHubBlockCode bool
-	Xhtml           bool
-
-	ExtNoIntraEmphasis bool
-	ExtTables          bool
-	ExtFencedCode      bool
-	ExtAutoLink        bool
-	ExtStrikeThrough   bool
-	ExtLaxHtmlBlocks   bool
-	ExtSpaceHeaders    bool
-}
-
-type HtmlRenderer struct {
-	options    *MarkdownOptions
-	closeTag   string
-	refs       []*LinkRef
-	activeChar [256]byte
-	blockBufs  []*bytes.Buffer
-	spanBufs   []*bytes.Buffer
-	maxNesting int
-}
-*/
-
 // TODO: what other chars are space?
 func isspace(c byte) bool {
 	return c == ' '
@@ -192,52 +135,10 @@ func isalnum(c byte) bool {
 	return c >= 'a' && c <= 'z'
 }
 
-func (rndr *render) newBuf(bufType int) (buf *bytes.Buffer) {
-	defer un(trace("newBuf"))
-
-	buf = new(bytes.Buffer)
-	rndr.work_bufs[bufType] = append(rndr.work_bufs[bufType], buf)
-	return buf
-}
-
-func (rndr *render) popBuf(bufType int) {
-	defer un(trace("popBuf"))
-	rndr.work_bufs[bufType] = rndr.work_bufs[bufType][0 : len(rndr.work_bufs[bufType])-1]
-}
-
 func (rndr *render) reachedNestingLimit() bool {
 	defer un(trace("reachedNestingLimit"))
 	return len(rndr.work_bufs[0])+len(rndr.work_bufs[1]) > rndr.max_nesting
 }
-
-/*
-func (rndr *HtmlRenderer) newBuf(bufType int) (buf *bytes.Buffer) {
-	defer un(trace("newBuf"))
-
-	buf = new(bytes.Buffer)
-	if BUFFER_BLOCK == bufType {
-		rndr.blockBufs = append(rndr.blockBufs, buf)
-	} else {
-		rndr.spanBufs = append(rndr.spanBufs, buf)
-	}
-	return
-}*/
-
-/*
-func (rndr *HtmlRenderer) popBuf(bufType int) {
-	defer un(trace("popBuf"))
-	if BUFFER_BLOCK == bufType {
-		rndr.blockBufs = rndr.blockBufs[0 : len(rndr.blockBufs)-1]
-	} else {
-		rndr.spanBufs = rndr.spanBufs[0 : len(rndr.spanBufs)-1]
-	}
-}*/
-
-/*
-func (rndr *HtmlRenderer) reachedNestingLimit() bool {
-	defer un(trace("reachedNestingLimit"))
-	return len(rndr.blockBufs)+len(rndr.spanBufs) > rndr.maxNesting
-}*/
 
 func put_scaped_char(ob *bytes.Buffer, c byte) {
 	switch {

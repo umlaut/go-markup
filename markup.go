@@ -6,17 +6,43 @@ import (
 	"strings"
 )
 
-var block_tags []string = []string{"p", "dl", "h1", "h2", "h3", "h4", "h5", "h6", "ol", "ul", "del", "div", "ins", "pre", "form", "math", "table", "iframe", "script", "fieldset", "noscript", "blockquote"}
-
 const (
-	INS_TAG = "ins"
-	DEL_TAG = "del"
+	BUFFER_BLOCK = iota
+	BUFFER_SPAN
+)
+const (
+	MKD_LI_END = 8	/* internal list flag */
 )
 
 type LinkRef struct {
 	id    []byte
 	link  []byte
 	title []byte
+}
+
+const (
+	MD_CHAR_NONE = iota
+	MD_CHAR_EMPHASIS
+	MD_CHAR_CODESPAN
+	MD_CHAR_LINEBREAK
+	MD_CHAR_LINK
+	MD_CHAR_LANGLE
+	MD_CHAR_ESCAPE
+	MD_CHAR_ENTITITY
+	MD_CHAR_AUTOLINK
+)
+
+type TriggerFunc func(ob *bytes.Buffer, rndr *render, data []byte) int
+
+var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, char_emphasis, char_codespan, char_linebreak, char_link, char_langle_tag, char_escape, char_entity, char_autolink}
+
+type render struct {
+	make 		mkd_renderer
+	refs       	[]*LinkRef
+	active_char [256]byte
+	work_bufs 	[2][]*bytes.Buffer // indexed by BUFFER_BLOCK or BUFFER_SPAN
+	ext_flags   uint
+	max_nesting int
 }
 
 var funcNestLevel int = 0
@@ -43,6 +69,26 @@ func un(s string) {
 	//fmt.Printf("%s%s()\n", sp, s)
 }
 
+func (rndr *render) newbuf(bufType int) (buf *bytes.Buffer) {
+	defer un(trace("newbuf"))
+
+	buf = new(bytes.Buffer)
+	rndr.work_bufs[bufType] = append(rndr.work_bufs[bufType], buf)
+	return buf
+}
+
+func (rndr *render) popbuf(bufType int) {
+	defer un(trace("popbuf"))
+	rndr.work_bufs[bufType] = rndr.work_bufs[bufType][0 : len(rndr.work_bufs[bufType])-1]
+}
+
+var block_tags []string = []string{"p", "dl", "h1", "h2", "h3", "h4", "h5", "h6", "ol", "ul", "del", "div", "ins", "pre", "form", "math", "table", "iframe", "script", "fieldset", "noscript", "blockquote"}
+
+const (
+	INS_TAG = "ins"
+	DEL_TAG = "del"
+)
+
 /***************************
  * HELPER FUNCTIONS *
  ***************************/
@@ -56,6 +102,27 @@ func is_safe_link(link []byte) bool {
 		}
 	}
 	return false
+}
+
+func unscape_text(ob *bytes.Buffer, src []byte) {
+	i := 0
+	size := len(src)
+	for i < size {
+		org := i
+		for i < size && src[i] != '\\' {
+			i++
+		}
+
+		if i > org {
+			ob.Write(src[org:i])
+		}
+
+		if i + 1 >= size {
+			break
+		}
+		ob.WriteByte(src[i+1])
+		i += 2
+	}
 }
 
 /* looks for the next emph char, skipping other constructs */
@@ -361,10 +428,6 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte) int {
 	// TODO: write me
 	return 0
 }
-
-type TriggerFunc func(ob *bytes.Buffer, rndr *render, data []byte) int
-
-var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, char_emphasis, char_codespan, char_linebreak, char_link, char_langle_tag, char_escape, char_entity, char_autolink}
 
 // writes '<${tag}>\n${text}</${tag}\n' ot "ob"
 func writeInTag(ob *bytes.Buffer, text *bytes.Buffer, tag string) {
