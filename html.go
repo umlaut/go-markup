@@ -638,33 +638,26 @@ func rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	ob.WriteString("\n</tr>")
 }
 
-static void
-rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{})
-{
+func rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{}) {
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
-	switch (align) {
+	switch align {
 	case MKD_TABLE_ALIGN_L:
-		BUFPUTSL(ob, "<td align=\"left\">");
-		break;
+		ob.WriteString("<td align=\"left\">")
 
 	case MKD_TABLE_ALIGN_R:
-		BUFPUTSL(ob, "<td align=\"right\">");
-		break;
+		ob.WriteString("<td align=\"right\">")
 
 	case MKD_TABLE_ALIGN_CENTER:
-		BUFPUTSL(ob, "<td align=\"center\">");
-		break;
+		ob.WriteString("<td align=\"center\">")
 
-	default:
-		BUFPUTSL(ob, "<td>");
-		break;
+	true:
+		ob.WriteString("<td>")
 	}
 
-	if (text)
-		bufput(ob, text->data, text->size);
-	BUFPUTSL(ob, "</td>");
+	ob.Write(text)
+	ob.WriteString("</td>")
 }
 
 func rndr_normal_text(ob *bytes.Buffer, text []byte, opaque interface{}) {
