@@ -453,16 +453,22 @@ func rndr_link(ob *bytes.Buffer, link []byte, title []byte, content []byte, opaq
 	return true
 }
 
-static void
-rndr_list(ob *bytes.Buffer, text []byte, int flags, void *opaque)
-{
+func rndr_list(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
 
-	bufput(ob, flags & MKD_LIST_ORDERED ? "<ol>\n" : "<ul>\n", 5);
-	if (text) bufput(ob, text->data, text->size);
-	bufput(ob, flags & MKD_LIST_ORDERED ? "</ol>\n" : "</ul>\n", 6);
+	if flags & MKD_LIST_ORDERED {
+		ob.WriteString("<ol>\n")
+	} else {
+		ob.WriteString("<ul>\n")		
+	}
+	ob.Write(text)
+	if flags & MKD_LIST_ORDERED {
+		ob.WriteString("</ol>\n")
+	} else {
+		ob.WriteString("</ul>\n")		
+	}
 }
 
 static void
