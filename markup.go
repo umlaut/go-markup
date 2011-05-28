@@ -824,9 +824,277 @@ func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 	return len(work)
 }
 
+func (rndr *render) find_ref(id []byte) *LinkRef {
+	//TODO: write me
+	//arr_sorted_find(&rndr->refs, &id, cmp_link_ref)
+	return nil
+}
+
+/* '[': parsing a link or an image */
 func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_link"))
-	// TODO: write me
+ 	is_img := false
+
+ 	if offset > 0 && data[offset-1] == '!' {
+ 		is_img = true
+ 	}
+
+ 	var content *bytes.Buffer
+ 	var title *bytes.Buffer
+ 	var u_link *bytes.Buffer
+
+	org_work_size := len(rndr.work_bufs[BUFFER_SPAN])
+
+	ret := false
+
+	/* checking whether the correct renderer exists */
+	if (is_img && nil != rndr.make.image) || (!is_img && nil != rndr.make.link) {
+		goto cleanup
+	}
+
+	data = data[offset:]
+	size := len(data)
+
+	var link *bytes.Buffer
+	i := 1
+	text_has_nl := false
+	/* looking for the matching closing bracket */
+	for level := 1; i < size; i += 1 {
+		if data[i] == '\n' {
+			text_has_nl = true
+		} else if data[i - 1] == '\\' {
+			continue
+		} else if data[i] == '[' {
+			level++
+		} else if data[i] == ']' {
+			level--
+			if level <= 0 {
+				break
+			}
+		}
+	}
+
+	if i >= size {
+		goto cleanup
+	}
+
+	txt_e := i
+	i += 1
+
+	/* skip any amount of whitespace or newline */
+	/* (this is much more laxist than original markdown syntax) */
+	for i < size && isspace(data[i]) {
+		i++
+	}
+
+	link_b := 0
+	link_e := 0
+	title_b := 0
+	title_e := 0
+
+	/* inline style link */
+	if i < size && data[i] == '(' {
+		/* skipping initial whitespace */
+		i += 1
+
+		for i < size && isspace(data[i]) {
+			i++
+		}
+
+		link_b = i
+
+		/* looking for link end: ' " ) */
+		for i < size {
+			if data[i] == '\\' {
+				i += 2
+			} else if data[i] == ')' || data[i] == '\'' || data[i] == '"' {
+				break
+			} else {
+				i += 1
+			}
+		}
+
+		if i >= size {
+			goto cleanup
+		}
+		link_e = i
+
+		/* looking for title end if present */
+		if data[i] == '\'' || data[i] == '"' {
+			i++
+			title_b = i
+
+			for i < size {
+				if data[i] == '\\' {
+					i += 2
+				} else if data[i] == ')' {
+					break
+				} else {
+					i += 1
+				}
+			}
+
+			if i >= size {
+				goto cleanup
+			}
+
+			/* skipping whitespaces after title */
+			title_e = i - 1
+			for title_e > title_b && isspace(data[title_e]) {
+				title_e--
+			}
+
+			/* checking for closing quote presence */
+			if data[title_e] != '\'' &&  data[title_e] != '"' {
+				title_b = 0
+				title_e = 0
+				link_e = i
+			}
+		}
+
+		/* remove whitespace at the end of the link */
+		for link_e > link_b && isspace(data[link_e - 1]) {
+			link_e--
+		}
+
+		/* remove optional angle brackets around the link */
+		if data[link_b] == '<' {
+			link_b++
+		}
+		if data[link_e - 1] == '>' {
+			link_e--
+		}
+
+		/* building escaped link and title */
+		if link_e > link_b {
+			link = rndr.newbuf(BUFFER_SPAN)
+			link.Write(data[link_b:link_e])
+		}
+
+		if title_e > title_b {
+			title = rndr.newbuf(BUFFER_SPAN)
+			title.Write(data[title_b:title_e])
+		}
+
+		i++
+	} else if i < size && data[i] == '[' {
+		/* reference style link */
+		var id []byte
+		var lr *LinkRef
+
+		/* looking for the id */
+		i += 1
+		link_b = i
+		for i < size && data[i] != ']' {
+			i++
+		}
+		if i >= size {
+			goto cleanup
+		}
+		link_e = i
+
+		/* finding the link_ref */
+		if link_b == link_e {
+			if text_has_nl {
+				b := rndr.newbuf(BUFFER_SPAN)
+
+				for j := 1; j < txt_e; j++ {
+					if data[j] != '\n' {
+						b.WriteByte(data[j])
+					} else if data[j - 1] != ' ' {
+						b.WriteByte(' ')
+					}
+				}
+
+				id = b.Bytes()
+			} else {
+				id = data[1:txt_e]
+			}
+		} else {
+			id = data[link_b:link_e]
+		}
+
+		lr = rndr.find_ref(id)
+		if nil == lr {
+			goto cleanup
+		}
+
+		/* keeping link and title from link_ref */
+		// TODO: not sure if that's righ
+		link = bytes.NewBuffer(lr.link)
+		title = bytes.NewBuffer(lr.title)
+		i += 1
+	} else {
+		/* shortcut reference style link */
+		var id []byte
+		var lr *LinkRef
+
+		/* crafting the id */
+		if text_has_nl {
+			b := rndr.newbuf(BUFFER_SPAN)
+			for j := 1; j < txt_e; j++ {
+				if data[j] != '\n' {
+					b.WriteByte(data[j])
+				} else if data[j - 1] != ' ' {
+					b.WriteByte(' ')
+				}
+			}
+
+			id = b.Bytes()
+		} else {
+			id = data[1:txt_e]
+		}
+
+		/* finding the link_ref */
+		lr = rndr.find_ref(id)
+		if nil == lr {
+			goto cleanup
+		}
+
+		/* keeping link and title from link_ref */
+		// TODO: not sure if bytes.NewBuffer() is righ
+		link = bytes.NewBuffer(lr.link)
+		title = bytes.NewBuffer(lr.title)
+
+		/* rewinding the whitespace */
+		i = txt_e + 1
+	}
+
+	/* building content: img alt is escaped, link content is parsed */
+	if txt_e > 1 {
+		content = rndr.newbuf(BUFFER_SPAN)
+		if is_img {
+			content.Write(data[1:txt_e])
+		} else {
+			parse_inline(content, rndr, data[1:txt_e])
+		}
+	}
+
+	if nil != link {
+		u_link = rndr.newbuf(BUFFER_SPAN)
+		unscape_text(u_link, link.Bytes())
+	}
+
+	/* calling the relevant rendering function */
+	if is_img {
+		// TODO:
+		//if ob.Len() && ob->data[ob->size - 1] == '!') {
+		//	ob->size -= 1
+		//}
+
+		ret = rndr.make.image(ob, u_link.Bytes(), title.Bytes(), content.Bytes(), rndr.make.opaque);
+	} else {
+		ret = rndr.make.link(ob, u_link.Bytes(), title.Bytes(), content.Bytes(), rndr.make.opaque);
+	}
+
+	/* cleanup */
+cleanup:
+	for org_work_size > len(rndr.work_bufs[BUFFER_SPAN]) {
+		rndr.popbuf(BUFFER_SPAN)
+	}
+	if ret {
+		return i
+	}
 	return 0
 }
 
