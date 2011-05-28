@@ -653,9 +653,20 @@ func char_codespan(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 
 func char_escape(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_escape"))
-	// TODO: write me
-	return 0
-}
+	escape_chars := []byte("\\`*_{}[]()#+-.!:|&<>")
+	if len(data) > 1 {
+		if -1 == bytes.IndexByte(escape_chars, data[1]) {
+			return 0
+		}
+
+		if nil != rndr.make.normal_text {
+			rndr.make.normal_text(ob, data[1:2], rndr.make.opaque)
+		} else {
+			ob.WriteByte(data[1])
+		}
+	}
+
+	return 2;}
 
 func char_entity(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_entity"))
