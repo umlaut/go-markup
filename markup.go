@@ -670,8 +670,31 @@ func char_escape(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 
 func char_entity(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_entity"))
-	// TODO: write me
-	return 0
+
+	size := len(data)
+	end := 1
+
+	if end < size && data[end] == '#' {
+		end++
+	}
+
+	for end < size && isalnum(data[end]) {
+		end++
+	}
+
+	if end < size && data[end] == ';' {
+		end += 1 /* real entity */
+	} else {
+		return 0 /* lone '&' */
+	}
+
+	if rndr.make.entity != nil {
+		rndr.make.entity(ob, data[:end], rndr.make.opaque)
+	} else {
+		ob.Write(data[:end])
+	}
+
+	return end
 }
 
 func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
