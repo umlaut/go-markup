@@ -1235,6 +1235,27 @@ func is_codefence(data []byte, syntax []byte) int {
 	return i + 1
 }
 
+/* returns whether the line is a hash-prefixed header */
+func is_atxheader(rndr *render, data []byte) bool {
+	defer un(trace("is_atxheader"))
+	if data[0] != '#' {
+		return false
+	}
+
+	if rndr.ext_flags & MKDEXT_SPACE_HEADERS != 0 {
+		level := 0
+		size := len(data)
+		for level < size && level < 6 && data[level] == '#' {
+			level++
+		}
+
+		if level < size && data[level] != ' ' && data[level] != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
 // Returns whether a line is a reference or not
 func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("isRef"))
@@ -1403,26 +1424,6 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 		}
 		i++
 	}
-}
-
-func is_atxheader(rndr *render, data []byte) bool {
-	defer un(trace("is_atxheader"))
-	if data[0] != '#' {
-		return false
-	}
-
-	if rndr.options.ExtSpaceHeaders {
-		level := 0
-		size := len(data)
-		for level < size && level < 6 && data[level] == '#' {
-			level++
-		}
-
-		if level < size && data[level] != ' ' && data[level] != '\t' {
-			return false
-		}
-	}
-	return true
 }
 
 /* returns whether the line is a setext-style hdr underline */
