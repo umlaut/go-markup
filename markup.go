@@ -1369,6 +1369,41 @@ func prefix_uli(data []byte) int {
 	return i + 2
 }
 
+/* handles parsing of a blockquote fragment */
+func parse_blockquote(ob *bytes.Buffer, rndr *render, data []byte) int {
+	defer un(trace("parse_blockquote"))
+	size := len(data)
+	work_data := make([]byte, 0, len(data))
+	beg := 0
+	end := 0
+	for beg < size {
+		for end = beg + 1; end < size && data[end-1] != '\n'; end++ {
+		}
+
+		pre := prefix_quote(data[beg:end])
+
+		if pre > 0 {
+			beg += pre /* skipping prefix */
+		} else if is_empty(data[beg:end]) > 0 && (end >= size || (prefix_quote(data[end:]) == 0 && is_empty(data[end:]) == 0)) {
+			/* empty line followed by non-quote line */
+			break
+		}
+		if beg < end {
+			work_data = append(work_data, data[beg:end]...)
+		}
+		beg = end
+	}
+
+	out := rndr.newbuf(BUFFER_BLOCK)
+	parse_block(out, rndr, work_data)
+	if nil != rndr.make.blockquote {
+		rndr.make.blockquote(ob, out.Bytes(), rndr.make.opaque)
+	}
+
+	rndr.popbuf(BUFFER_BLOCK)
+	return end
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
@@ -1566,37 +1601,6 @@ func htmlblock_end(tag string, rndr *render, data []byte) int {
 	return 0
 }
 
-/* handles parsing of a blockquote fragment */
-func parse_blockquote(ob *bytes.Buffer, rndr *render, data []byte) int {
-	defer un(trace("parse_blockquote"))
-	size := len(data)
-	work_data := make([]byte, 0, len(data))
-	beg := 0
-	end := 0
-	for beg < size {
-		for end = beg + 1; end < size && data[end-1] != '\n'; end++ {
-		}
-
-		pre := prefix_quote(data[beg:end])
-
-		if pre > 0 {
-			beg += pre /* skipping prefix */
-		} else if is_empty(data[beg:end]) > 0 && (end >= size || (prefix_quote(data[end:]) == 0 && is_empty(data[end:]) == 0)) {
-			/* empty line followed by non-quote line */
-			break
-		}
-		if beg < end { // copy into the in-place working buffer
-			work_data = append(work_data, data[beg:end]...)
-		}
-		beg = end
-	}
-
-	out := rndr.newBuf(BUFFER_BLOCK)
-	parse_block(out, rndr, work_data)
-	rndr.blockquote(ob, out)
-	rndr.popBuf(BUFFER_BLOCK)
-	return end
-}
 
 /* parsing of inline HTML block */
 func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool) int {
