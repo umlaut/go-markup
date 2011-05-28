@@ -1149,7 +1149,7 @@ func is_hrule(data []byte) bool {
 }
 
 /* check if a line is a code fence; return its size if it is */
-func is_codefence(data []byte, syntax []byte) int {
+func is_codefence(data []byte, syntax *[]byte) int {
 	i := 0
 	n := 0
 	size := len(data)
@@ -1187,11 +1187,11 @@ func is_codefence(data []byte, syntax []byte) int {
 			i++
 		}
 
-		syntax = data[i:]
+		*syntax = data[i:]
 
 		if i < size && data[i] == '{' {
 			i++
-			syntax = syntax[1:]
+			*syntax = (*syntax)[1:]
 
 			for i < size && data[i] != '}' && data[i] != '\n' {
 				syn++
@@ -1204,12 +1204,12 @@ func is_codefence(data []byte, syntax []byte) int {
 
 			/* strip all whitespace at the beginning and the end
 			 * of the {} block */
-			for syn > 0 && isspace(syntax[0]) {
-				syntax = syntax[1:]
+			for syn > 0 && isspace((*syntax)[0]) {
+				*syntax = (*syntax)[1:]
 				syn--
 			}
 
-			for syn > 0 && isspace(syntax[syn - 1]) {
+			for syn > 0 && isspace((*syntax)[syn - 1]) {
 				syn--
 			}
 
@@ -1221,7 +1221,7 @@ func is_codefence(data []byte, syntax []byte) int {
 			}
 		}
 
-		syntax = syntax[:syn] // TODO: hopefully right
+		*syntax = (*syntax)[:syn] // TODO: hopefully right
 	}
 
 	for i < size && data[i] != '\n' {
@@ -1493,6 +1493,54 @@ func parse_paragraph(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return end
 }
 
+/* handles parsing of a block-level code fragment */
+func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
+	defer un(trace("parse_fencedcode"))
+	size := len(data)
+	var lang []byte
+	beg := is_codefence(data, &lang)
+	if beg == 0 {
+		return 0
+	}
+	end := 0
+	work := rndr.newbuf(BUFFER_BLOCK)
+	for beg < size {
+		fence_end := is_codefence(data[beg:], nil)
+		if fence_end != 0 {
+			beg += fence_end
+			break
+		}
+
+		for end = beg + 1; end < size && data[end - 1] != '\n'; end += 1 {
+			// do nothing
+		}
+
+		if beg < end {
+			/* verbatim copy to the working buffer,
+				escaping entities */
+			if is_empty(data[beg:end]) > 0 {
+				work.WriteByte('\n')
+			} else {
+				work.Write(data[beg:end])
+			}
+		}
+		beg = end
+	}
+
+	/* TODO:
+	if work.Len() > 0 && work[len(work) - 1] != '\n' {
+		work.WriteByte('\n')
+	}
+	*/
+
+	if nil != rndr.make.blockcode {
+		rndr.make.blockcode(ob, work.Bytes(), lang, rndr.make.opaque)		
+	}
+
+	rndr.popbuf(BUFFER_BLOCK)
+	return beg
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
@@ -1669,12 +1717,6 @@ func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return 0
 }
 
-
-func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
-	defer un(trace("parse_fencedcode"))
-	// TODO: write me
-	return 0
-}
 
 func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_table"))
