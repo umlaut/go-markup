@@ -1541,6 +1541,52 @@ func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return beg
 }
 
+func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
+	size := len(data)
+	work := rndr.newbuf(BUFFER_BLOCK)
+
+	beg := 0
+	end := 0
+	for beg < size {
+		for end = beg + 1; end < size && data[end - 1] != '\n'; end++  {
+			// do nothing
+		}
+		pre := prefix_code(data[beg:end])
+
+		if pre > 0 {
+			beg += pre /* skipping prefix */
+		} else if 0 == is_empty(data[beg:end]) {
+			/* non-empty non-prefixed line breaks the pre */
+			break
+		}
+
+		if beg < end {
+			/* verbatim copy to the working buffer,
+				escaping entities */
+			if is_empty(data[beg:end]) > 0 {
+				work.WriteByte('\n')
+			} else {
+				work.Write(data[beg:end])
+			}
+		}
+		beg = end
+	}
+
+	/* TODO: port me
+	while (work->size && work->data[work->size - 1] == '\n')
+		work->size -= 1;
+	*/
+
+	work.WriteByte('\n')
+
+	if rndr.make.blockcode != nil {
+		var emptySlice []byte
+		rndr.make.blockcode(ob, work.Bytes(), emptySlice, rndr.make.opaque)
+	}
+	rndr.popbuf(BUFFER_BLOCK)
+	return beg;
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
