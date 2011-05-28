@@ -1256,6 +1256,63 @@ func is_atxheader(rndr *render, data []byte) bool {
 	return true
 }
 
+/* returns whether the line is a setext-style hdr underline */
+func is_headerline(data []byte) int {
+	defer un(trace("is_headerline"))
+	i := 0
+	size := len(data)
+
+	/* test of level 1 header */
+	if data[i] == '=' {
+		for i = 1; i < size && data[i] == '='; i++ {
+			// do nothing
+		}
+		for i < size && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+		if i >= size || data[i] == '\n' {
+			return 1
+		}
+		return 0
+	}
+
+	/* test of level 2 header */
+	if data[i] == '-' {
+		for i = 1; i < size && data[i] == '-'; i++ {
+			// do nothing
+		}
+		for i < size && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+		if i >= size || data[i] == '\n' {
+			return 2
+		}
+	}
+	return 0
+}
+
+func skip_spaces(data []byte, max int) int {
+	n := 0
+	for n < max && n < len(data) && data[n] == ' ' {
+		n++
+	}
+	return n
+}
+/* returns blockquote prefix length */
+func prefix_quote(data []byte) int {
+	defer un(trace("prefix_quote"))
+	size := len(data)
+	i := skip_spaces(data, 3)
+	if i < size && data[i] == '>' {
+		if i+1 < size && (data[i+1] == ' ' || data[i+1] == '\t') {
+			return i + 2
+		} else {
+			return i + 1
+		}
+	}
+	return 0
+}
+
 // Returns whether a line is a reference or not
 func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("isRef"))
@@ -1426,40 +1483,6 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 	}
 }
 
-/* returns whether the line is a setext-style hdr underline */
-func is_headerline(data []byte) int {
-	defer un(trace("is_headerline"))
-	i := 0
-	size := len(data)
-
-	/* test of level 1 header */
-	if data[i] == '=' {
-		for i = 1; i < size && data[i] == '='; i++ {
-			// do nothing
-		}
-		for i < size && (data[i] == ' ' || data[i] == '\t') {
-			i++
-		}
-		if i >= size || data[i] == '\n' {
-			return 1
-		}
-		return 0
-	}
-
-	/* test of level 2 header */
-	if data[i] == '-' {
-		for i = 1; i < size && data[i] == '-'; i++ {
-			// do nothing
-		}
-		for i < size && (data[i] == ' ' || data[i] == '\t') {
-			i++
-		}
-		if i >= size || data[i] == '\n' {
-			return 2
-		}
-	}
-	return 0
-}
 func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_atxheader"))
 	// TODO: implement me
@@ -1476,29 +1499,6 @@ func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_table"))
 	// TODO: write me
-	return 0
-}
-
-func skip_spaces(data []byte, max int) int {
-	n := 0
-	for n < max && n < len(data) && data[n] == ' ' {
-		n++
-	}
-	return n
-}
-
-/* returns blockquote prefix length */
-func prefix_quote(data []byte) int {
-	defer un(trace("prefix_quote"))
-	size := len(data)
-	i := skip_spaces(data, 3)
-	if i < size && data[i] == '>' {
-		if i+1 < size && (data[i+1] == ' ' || data[i+1] == '\t') {
-			return i + 2
-		} else {
-			return i + 1
-		}
-	}
 	return 0
 }
 
