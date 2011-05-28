@@ -1098,6 +1098,143 @@ cleanup:
 	return 0
 }
 
+/*********************************
+ * BLOCK-LEVEL PARSING FUNCTIONS *
+ *********************************/
+
+/* returns the line length when it is empty, 0 otherwise */
+func is_empty(data []byte) int {
+	defer un(trace("is_empty"))
+	var i int
+	size := len(data)
+	for i = 0; i < size && data[i] != '\n'; i++ {
+		if data[i] != ' ' && data[i] != '\t' {
+			return 0
+		}
+	}
+	return i + 1
+}
+
+/* returns whether a line is a horizontal rule */
+func is_hrule(data []byte) bool {
+	defer un(trace("is_hrule"))
+	size := len(data)
+	if size < 3 {
+		return false
+	}
+	i := 0
+	/* skipping initial spaces */
+	for i < 3 && data[i] == ' ' {
+		i++
+	}
+
+	/* looking at the hrule char */
+	if i+2 >= size || (data[i] != '*' && data[i] != '-' && data[i] != '_') {
+		return false
+	}
+	c := data[i]
+
+	/* the whole line must be the char or whitespace */
+	n := 0
+	for i < size && data[i] != '\n' {
+		if data[i] == c {
+			n += 1
+		} else if data[i] != ' ' && data[i] != '\t' {
+			return false
+		}
+		i += 1
+	}
+
+	return n >= 3
+}
+
+/* check if a line is a code fence; return its size if it is */
+func is_codefence(data []byte, syntax []byte) int {
+	i := 0
+	n := 0
+	size := len(data)
+
+	/* skipping initial spaces */
+	if size < 3 {
+		return 0
+	}
+
+	for i = 0; i < 3 && data[i] == ' '; i++ {
+		// do nothing
+	}
+
+	/* looking at the hrule char */
+	if i + 2 >= size || !(data[i] == '~' || data[i] == '`') {
+		return 0
+	}
+
+	c := data[i]
+
+	/* the whole line must be the char or whitespace */
+	for i < size && data[i] == c {
+		n++
+		i++
+	}
+
+	if n < 3 {
+		return 0
+	}
+
+	if syntax != nil {
+		syn := 0
+
+		for i < size && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+
+		syntax = data[i:]
+
+		if i < size && data[i] == '{' {
+			i++
+			syntax = syntax[1:]
+
+			for i < size && data[i] != '}' && data[i] != '\n' {
+				syn++
+				i++
+			}
+
+			if i == size || data[i] != '}' {
+				return 0
+			}
+
+			/* strip all whitespace at the beginning and the end
+			 * of the {} block */
+			for syn > 0 && isspace(syntax[0]) {
+				syntax = syntax[1:]
+				syn--
+			}
+
+			for syn > 0 && isspace(syntax[syn - 1]) {
+				syn--
+			}
+
+			i++
+		} else {
+			for i < size && !isspace(data[i]) {
+				syn++
+				i++
+			}
+		}
+
+		syntax = syntax[:syn] // TODO: hopefully right
+	}
+
+	for i < size && data[i] != '\n' {
+		if !isspace(data[i]) {
+			return 0
+		}
+
+		i++
+	}
+
+	return i + 1
+}
+
 // Returns whether a line is a reference or not
 func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("isRef"))
@@ -1328,50 +1465,6 @@ func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return 0
 }
 
-func is_empty(data []byte) int {
-	defer un(trace("is_empty"))
-	var i int
-	size := len(data)
-	for i = 0; i < size && data[i] != '\n'; i++ {
-		if data[i] != ' ' && data[i] != '\t' {
-			return 0
-		}
-	}
-	return i + 1
-}
-
-/* returns whether a line is a horizontal rule */
-func is_hrule(data []byte) bool {
-	defer un(trace("is_hrule"))
-	size := len(data)
-	if size < 3 {
-		return false
-	}
-	i := 0
-	/* skipping initial spaces */
-	for i < 3 && data[i] == ' ' {
-		i++
-	}
-
-	/* looking at the hrule char */
-	if i+2 >= size || (data[i] != '*' && data[i] != '-' && data[i] != '_') {
-		return false
-	}
-	c := data[i]
-
-	/* the whole line must be the char or whitespace */
-	n := 0
-	for i < size && data[i] != '\n' {
-		if data[i] == c {
-			n += 1
-		} else if data[i] != ' ' && data[i] != '\t' {
-			return false
-		}
-		i += 1
-	}
-
-	return n >= 3
-}
 
 func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_fencedcode"))
