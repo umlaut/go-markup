@@ -1313,9 +1313,21 @@ func prefix_quote(data []byte) int {
 	return 0
 }
 
+/* returns prefix length for block code*/
+func prefix_code(data []byte) int {
+	size := len(data)
+	if size > 0 && data[0] == '\t' {
+		return 1
+	}
+	if size > 3 && data[0] == ' ' && data[1] == ' ' && data[2] == ' ' && data[3] == ' ' {
+		return 4
+	}
+	return 0
+}
+
 // Returns whether a line is a reference or not
-func isRef(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
-	defer un(trace("isRef"))
+func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
+	defer un(trace("is_ref"))
 	ref = false
 	last = 0 // doesn't matter unless ref is true
 
@@ -1822,7 +1834,7 @@ func MarkdownToHtml(s string, options uint) string {
 	/* first pass: looking for references, copying everything else */
 	beg := 0
 	for beg < len(ib) {
-		if isRef, last, ref := isRef(ib, beg, len(ib)); isRef {
+		if isRef, last, ref := is_ref(ib, beg, len(ib)); isRef {
 			beg = last
 			if nil != ref {
 				rndr.refs = append(rndr.refs, ref)
