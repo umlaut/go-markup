@@ -1325,6 +1325,31 @@ func prefix_code(data []byte) int {
 	return 0
 }
 
+/* returns ordered list item prefix */
+func prefix_oli(data []byte) int {
+	size := len(data)
+	i := 0
+	if i < size && data[i] == ' ' {
+		i += 1
+	}
+	if i < size && data[i] == ' ' {
+		i += 1
+	}
+	if i < size && data[i] == ' ' {
+		i += 1
+	}
+	if i >= size || data[i] < '0' || data[i] > '9' {
+		return 0
+	}
+	for i < size && data[i] >= '0' && data[i] <= '9' {
+		i += 1
+	}
+	if i + 1 >= size || data[i] != '.' || (data[i + 1] != ' ' && data[i + 1] != '\t') {
+		return 0
+	}
+	return i + 2
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
