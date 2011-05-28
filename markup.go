@@ -1404,6 +1404,95 @@ func parse_blockquote(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return end
 }
 
+/* handles parsing of a regular paragraph */
+func parse_paragraph(ob *bytes.Buffer, rndr *render, data []byte) int {
+	defer un(trace("parse_paragraph"))
+	size := len(data)
+	i := 0
+	end := 0
+	level := 0
+	for i < size {
+		for end = i + 1; end < size && data[end-1] != '\n'; end++ {
+			/* empty */
+		}
+
+		if is_empty(data[i:]) > 0 {
+			break
+		}
+		if level = is_headerline(data[i:]); level != 0 {
+			break
+		}
+
+		if rndr.ext_flags & MKDEXT_LAX_HTML_BLOCKS != 0 {
+			if data[i] == '<' && rndr.make.blockhtml  != nil && parse_htmlblock(ob, rndr, data[i:], false) > 0 {
+				end = i
+				break
+			}
+		}
+
+		if is_atxheader(rndr, data[i:]) || is_hrule(data[i:]) {
+			end = i
+			break
+		}
+
+		i = end
+	}
+
+	work_size := i
+	if work_size > 0 && data[work_size-1] == '\n' {
+		work_size--
+	}
+
+	work := data
+
+	if 0 == level {
+		tmp := rndr.newbuf(BUFFER_BLOCK)
+		parse_inline(tmp, rndr, data[:work_size])
+		if nil != rndr.make.paragraph {
+			rndr.make.paragraph(ob, tmp.Bytes(), rndr.make.opaque)
+		}
+		rndr.popbuf(BUFFER_BLOCK)
+	} else {
+		if work_size > 0 {
+			i = work_size;
+			work_size -= 1
+
+			for work_size > 0 && data[work_size] != '\n' {
+				work_size -= 1
+			}
+
+			beg := work_size + 1
+			for work_size > 0 && data[work_size - 1] == '\n' {
+				work_size -= 1
+			}
+
+			if work_size > 0 {
+				tmp := rndr.newbuf(BUFFER_BLOCK)
+				parse_inline(tmp, rndr, work[:size])
+
+				if rndr.make.paragraph != nil {
+					rndr.make.paragraph(ob, tmp.Bytes(), rndr.make.opaque)
+				}
+
+				rndr.popbuf(BUFFER_BLOCK)
+				work = work[beg:i]
+			} else {
+				work = work[:i]
+			}
+		}
+
+		header_work := rndr.newbuf(BUFFER_SPAN)
+		parse_inline(header_work, rndr, work)
+
+		if nil != rndr.make.header {
+			rndr.make.header(ob, header_work.Bytes(), level, rndr.make.opaque)
+		}
+
+		rndr.popbuf(BUFFER_SPAN)
+	}
+	return end
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
@@ -1709,60 +1798,6 @@ func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool
 	}
 
 	return i
-}
-
-/* handles parsing of a regular paragraph */
-func parse_paragraph(ob *bytes.Buffer, rndr *render, data []byte) int {
-	defer un(trace("parse_paragraph"))
-
-	//struct buf work = { data, 0, 0, 0, 0 }; /* volatile working buffer */
-	i := 0
-	end := 0
-	size := len(data)
-
-	level := 0
-	for i < size {
-		for end = i + 1; end < size && data[end-1] != '\n'; end++ {
-			/* empty */
-		}
-
-		if is_empty(data[i:]) > 0 {
-			break
-		}
-		level = is_headerline(data[i:])
-		if level != 0 {
-			break
-		}
-
-		if rndr.options.ExtLaxHtmlBlocks {
-			if data[i] == '<' && parse_htmlblock(ob, rndr, data[i:], false) > 0 {
-				end = i
-				break
-			}
-		}
-
-		if is_atxheader(rndr, data[i:]) || is_hrule(data[i:]) {
-			end = i
-			break
-		}
-
-		i = end
-	}
-
-	work_size := i
-	if work_size > 0 && data[work_size-1] == '\n' {
-		work_size--
-	}
-
-	if 0 == level {
-		tmp := rndr.newBuf(BUFFER_BLOCK)
-		parse_inline(tmp, rndr, data[:work_size])
-		rndr.paragraph(ob, tmp.Bytes())
-		rndr.popBuf(BUFFER_BLOCK)
-	} else {
-		// TODO: write me
-	}
-	return end
 }
 
 func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
