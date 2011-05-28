@@ -654,7 +654,11 @@ func char_codespan(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 func char_escape(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_escape"))
 	escape_chars := []byte("\\`*_{}[]()#+-.!:|&<>")
-	if len(data) > 1 {
+
+	data = data[offset:]
+	size := len(data)
+
+	if size > 1 {
 		if -1 == bytes.IndexByte(escape_chars, data[1]) {
 			return 0
 		}
@@ -671,6 +675,7 @@ func char_escape(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 func char_entity(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_entity"))
 
+	data = data[offset:]
 	size := len(data)
 	end := 1
 
@@ -703,6 +708,8 @@ func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) in
 	altype := MKDA_NOT_AUTOLINK
 	end := tag_length(data, &altype);
 
+	data = data[offset:]
+
 	work := data[:end]
 	ret := false
 
@@ -726,8 +733,95 @@ func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) in
 
 func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_autolink"))
-	// TODO: write me
-	return 0
+	//struct buf work = { data, 0, 0, 0, 0 };
+	var copen byte
+
+	if offset > 0 {
+		if !isspace(data[offset-1]) && !ispunct(data[offset-1]) {
+			return 0
+		}
+	}
+
+	dataorig := data
+	data = data[offset:]
+	size := len(data)
+	if !is_safe_link(data) {
+		return 0
+	}
+
+	link_end := 0
+	for link_end < size && !isspace(data[link_end]) {
+		link_end++
+	}
+
+	/* Skip punctuation at the end of the link */
+	if (data[link_end - 1] == '.' || data[link_end - 1] == ',' || data[link_end - 1] == ';') && data[link_end - 2] != '\\' {
+		link_end--
+	}
+
+	/* See if the link finishes with a punctuation sign that can be closed. */
+	switch data[link_end - 1] {
+		case '"':	copen = '"'
+		case '\'':	copen = '\''
+		case ')':	copen = '('
+		case ']':	copen = '['
+		case '}':	copen = '{'
+	}
+
+	if copen != 0 {
+		buf_start_idx := 0
+		buf_end_idx := offset + link_end - 2
+
+		open_delim := 1
+
+		/* Try to close the final punctuation sign in this same line;
+		 * if we managed to close it outside of the URL, that means that it's
+		 * not part of the URL. If it closes inside the URL, that means it
+		 * is part of the URL.
+		 *
+		 * Examples:
+		 *
+		 *	foo http://www.pokemon.com/Pikachu_(Electric) bar
+		 *		=> http://www.pokemon.com/Pikachu_(Electric)
+		 *
+		 *	foo (http://www.pokemon.com/Pikachu_(Electric)) bar
+		 *		=> http://www.pokemon.com/Pikachu_(Electric)
+		 *
+		 *	foo http://www.pokemon.com/Pikachu_(Electric)) bar
+		 *		=> http://www.pokemon.com/Pikachu_(Electric))
+		 *
+		 *	(foo http://www.pokemon.com/Pikachu_(Electric)) bar
+		 *		=> foo http://www.pokemon.com/Pikachu_(Electric)
+		 */
+
+		for buf_end_idx >= buf_start_idx && dataorig[buf_end_idx] != '\n' && open_delim == 0{
+			if dataorig[buf_end_idx] == data[link_end - 1] {
+				open_delim++
+			}
+
+			if dataorig[buf_end_idx] == copen {
+				open_delim--
+			}
+
+			buf_end_idx--
+		}
+
+		if open_delim == 0 {
+			link_end--
+		}
+	}
+
+	work := data[:link_end]
+
+	if rndr.make.autolink != nil {
+		u_link := rndr.newbuf(BUFFER_SPAN)
+		unscape_text(u_link, work)	
+
+		rndr.make.autolink(ob, u_link.Bytes(), MKDA_NORMAL, rndr.make.opaque)
+		rndr.popbuf(BUFFER_SPAN)
+	}
+
+	return len(work)
 }
 
 func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
