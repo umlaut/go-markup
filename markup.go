@@ -699,8 +699,29 @@ func char_entity(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 
 func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_langle_tag"))
-	// TODO: write me
-	return 0
+
+	altype := MKDA_NOT_AUTOLINK
+	end := tag_length(data, &altype);
+
+	work := data[:end]
+	ret := false
+
+	if end > 2 {
+		if (rndr.make.autolink != nil) && (altype != MKDA_NOT_AUTOLINK) {
+			u_link := rndr.newbuf(BUFFER_SPAN)
+			work := data[1:end-1]
+			unscape_text(u_link, work)
+			ret = rndr.make.autolink(ob, u_link.Bytes(), altype, rndr.make.opaque)
+			rndr.popbuf(BUFFER_SPAN)
+		} else if rndr.make.raw_html_tag != nil {
+			ret = rndr.make.raw_html_tag(ob, work, rndr.make.opaque)
+		}
+	}
+
+	if !ret {
+		return 0
+	}
+	return end
 }
 
 func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
