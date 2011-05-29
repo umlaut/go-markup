@@ -76,7 +76,7 @@ func trace(s string, args ...string) string {
 	if !dolog {
 		return s
 	}
-	sp := spaces(funcNestLevel * 2 - 2)
+	sp := spaces(funcNestLevel*2 - 2)
 	if len(args) > 0 {
 		fmt.Printf("%s%s(%s)\n", sp, s, args[0])
 	} else {
