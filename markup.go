@@ -108,6 +108,38 @@ func un(s string) {
 	//fmt.Printf("%s%s()\n", sp, s)
 }
 
+func is_nl2(c byte) bool {
+	return c == '\n' || c == '\r'
+}
+
+func remove_from_end(b *bytes.Buffer, c byte) {
+	d := b.Bytes()
+	if len(d) > 0 && d[len(d)-1] == 'c' {
+		b.Truncate(b.Len()-1)
+	}
+}
+
+func ensure_ends_with_nl(b *bytes.Buffer) {
+	if b.Len() == 0 {
+		return
+	}
+	data := b.Bytes()
+	if !is_nl2(data[len(data)-1]) {
+		b.WriteByte('\n')
+	}
+}
+
+func trim_right(b *bytes.Buffer, c byte) {
+	trim_count := 0
+	d := b.Bytes()
+	for i := len(d) - 1; i >= 0 && d[i] == c; i-- {
+		trim_count++
+	}
+	if trim_count > 0 {
+		b.Truncate(len(d) - trim_count)
+	}
+}
+
 func (rndr *render) newbuf(bufType int) (buf *bytes.Buffer) {
 	//defer un(trace("newbuf"))
 
@@ -1090,7 +1122,7 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 		}
 
 		/* keeping link and title from link_ref */
-		// TODO: not sure if bytes.NewBuffer() is righ
+		// TODO: not sure if bytes.NewBuffer() is right
 		link = bytes.NewBuffer(lr.link)
 		title = bytes.NewBuffer(lr.title)
 
@@ -1115,11 +1147,7 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 
 	/* calling the relevant rendering function */
 	if is_img {
-		// TODO:
-		//if ob.Len() && ob->data[ob->size - 1] == '!') {
-		//	ob->size -= 1
-		//}
-
+		remove_from_end(ob, '!')
 		ret = rndr.make.image(ob, u_link.Bytes(), title.Bytes(), content.Bytes(), rndr.make.opaque)
 	} else {
 		ret = rndr.make.link(ob, u_link.Bytes(), title.Bytes(), content.Bytes(), rndr.make.opaque)
@@ -1567,11 +1595,7 @@ func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 		beg = end
 	}
 
-	/* TODO:
-	if work.Len() > 0 && work[len(work) - 1] != '\n' {
-		work.WriteByte('\n')
-	}
-	*/
+	ensure_ends_with_nl(work)
 
 	if nil != rndr.make.blockcode {
 		rndr.make.blockcode(ob, work.Bytes(), lang, rndr.make.opaque)
@@ -1612,11 +1636,7 @@ func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 		beg = end
 	}
 
-	/* TODO: port me
-	while (work->size && work->data[work->size - 1] == '\n')
-		work->size -= 1;
-	*/
-
+	trim_right(work, '\n')
 	work.WriteByte('\n')
 
 	if rndr.make.blockcode != nil {
@@ -2492,11 +2512,7 @@ func MarkdownToHtml(s string, options uint) string {
 
 	if text.Len() > 0 {
 		/* adding a final newline if not already present */
-		data := text.Bytes()
-		if data[len(data)-1] != '\n' && data[len(data)-1] != '\r' {
-			text.WriteByte('\n')
-		}
-
+		ensure_ends_with_nl(text)
 		parse_block(ob, &rndr, text.Bytes())
 	}
 
