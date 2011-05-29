@@ -1773,6 +1773,44 @@ func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return skip
 }
 
+// checking end of HTML block : </tag>[ \t]*\n[ \t*]\n
+// returns the length on match, 0 otherwise
+func htmlblock_end(tag []byte, rndr *render, data []byte) int {
+	defer un(trace("htmlblock_end"))
+	size := len(data)
+	tag_size := len(tag)
+
+	/* assuming data[0] == '<' && data[1] == '/' already tested */
+
+	/* checking if tag is a match */
+	if tag_size + 3 >= size || !bytes.HasPrefix(data[2:], tag) || data[tag_size + 2] != '>' {
+		return 0
+	}
+
+	/* checking white lines */
+	i := tag_size + 3
+	w := 0
+	if i < size {
+		if w = is_empty(data[i:]); w == 0 {
+			return 0; /* non-blank after tag */			
+		}
+	}
+	i += w
+	w = 0
+
+	if rndr.ext_flags & MKDEXT_LAX_HTML_BLOCKS != 0 {
+		if i < size {
+			w = is_empty(data[i:])
+		}
+	} else  {
+		if i < size {
+			if w = is_empty(data[i:]); w == 0 {
+				return 0; /* non-blank line after tag line */
+			}
+		}
+	}
+	return i + w
+}
 
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
@@ -1949,15 +1987,6 @@ func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	// TODO: write me
 	return 0
 }
-
-// checking end of HTML block : </tag>[ \t]*\n[ \t*]\n
-//	returns the length on match, 0 otherwise
-func htmlblock_end(tag string, rndr *render, data []byte) int {
-	defer un(trace("htmlblock_end"))
-	// TODO: write me
-	return 0
-}
-
 
 /* parsing of inline HTML block */
 func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool) int {
