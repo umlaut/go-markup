@@ -1732,6 +1732,48 @@ func parse_list(ob *bytes.Buffer, rndr *render, data []byte, flags int) int {
 	return i
 }
 
+/* parsing of atx-style headers */
+func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
+	defer un(trace("parse_atxheader"))
+	size := len(data)
+	level := 0
+
+	for level < size && level < 6 && data[level] == '#' {
+		level++
+	}
+
+	i := 0
+	for i = level; i < size && (data[i] == ' ' || data[i] == '\t'); i++ {
+		// do nothing
+	}
+
+	end := 0
+	for end = i; end < size && data[end] != '\n'; end++ {
+		// do nothing
+	}
+	skip := end
+
+	for end > 0 && data[end - 1] == '#' {
+		end--
+	}
+
+	for end > 0 && (data[end - 1] == ' ' || data[end - 1] == '\t') {
+		end--
+	}
+
+	if end > i {
+		work := rndr.newbuf(BUFFER_SPAN)
+		parse_inline(work, rndr, data[i:end])
+		if nil != rndr.make.header {
+			rndr.make.header(ob, work.Bytes(), level, rndr.make.opaque)
+		}
+		rndr.popbuf(BUFFER_SPAN)
+	}
+
+	return skip
+}
+
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
@@ -1901,13 +1943,6 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 		i++
 	}
 }
-
-func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
-	defer un(trace("parse_atxheader"))
-	// TODO: implement me
-	return 0
-}
-
 
 func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_table"))
