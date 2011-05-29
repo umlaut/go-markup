@@ -74,5 +74,6 @@ func testStrings() {
 
 func main() {
 	//testFiles()
+	markup.UnitTest()
 	testStrings()
 }

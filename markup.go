@@ -335,6 +335,9 @@ func find_emph_char(data []byte, c byte) int {
 		for i < size && data[i] != c && data[i] != '`' && data[i] != '[' {
 			i += 1
 		}
+		if i >= size {
+			return 0
+		}
 
 		if data[i] == c {
 			return i
@@ -2477,4 +2480,8 @@ func MarkdownToHtml(s string, options uint) string {
 	}
 
 	return string(ob.Bytes())
+}
+
+func UnitTest() {
+	find_emph_char([]byte("ca"), '*')
 }
