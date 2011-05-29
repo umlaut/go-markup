@@ -3,6 +3,7 @@ package markup
 import (
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -85,6 +86,22 @@ func trace(s string, args ...string) string {
 	return s
 }
 
+func sfmt(s string) string {
+	s = strings.Replace(s, "\n", `\n`, -1)
+	s = strings.Replace(s, "\r", `\r`, -1)
+	s = strings.Replace(s, "\t", `\t`, -1)
+	return s
+}
+
+func trace2(s string, arg []byte) string {
+	funcNestLevel++
+	if !dolog {
+		return s
+	}
+	sp := spaces(funcNestLevel*2 - 2)
+	fmt.Printf("%s%s(%d:%s)\n", sp, s, len(arg), sfmt(string(arg)))
+	return s
+}
 func un(s string) {
 	funcNestLevel--
 	//sp := spaces(funcNestLevel)	
@@ -1613,7 +1630,9 @@ func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 /* parse_listitem • parsing of a single list item */
 /*	assuming initial prefix is already removed */
 func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int {
-	defer un(trace("parse_listitem"))
+	trace2("parse_listitem", data)
+	defer un("")
+	//defer un(trace2("parse_listitem", data))
 	size := len(data)
 	orgpre := 0
 	/* keeping track of the first indentation prefix */
@@ -1701,7 +1720,7 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 		in_empty = false
 
 		/* adding the line without prefix into the working buffer */
-		work.Write(data[beg+i : end-beg-i])
+		work.Write(data[beg+i : end])
 		beg = end
 		//fmt.Printf("beg 4: %d\n", beg)
 	}
@@ -2208,7 +2227,7 @@ func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
 
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
-	defer un(trace("is_ref"))
+	//defer un(trace("is_ref"))
 	ref = false
 	last = 0 // doesn't matter unless ref is true
 
@@ -2350,7 +2369,7 @@ func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 }
 
 func expand_tabs(ob *bytes.Buffer, line []byte) {
-	defer un(trace("expand_tabs"))
+	//defer un(trace("expand_tabs"))
 	tab := 0
 	i := 0
 	size := len(line)
