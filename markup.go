@@ -69,7 +69,7 @@ func spaces(n int) string {
 	return string(r)
 }
 
-var dolog bool = true
+var dolog bool = false
 
 func trace(s string, args ...string) string {
 	funcNestLevel++
