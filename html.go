@@ -235,7 +235,7 @@ func rndr_autolink(ob *bytes.Buffer, link []byte, typ int, opaque interface{}) b
 		return false
 	}
 
-	if (options.flags & HTML_SAFELINK != 0) && !is_safe_link(link) && typ != MKDA_EMAIL {
+	if (options.flags&HTML_SAFELINK != 0) && !is_safe_link(link) && typ != MKDA_EMAIL {
 		return false
 	}
 
@@ -406,7 +406,7 @@ func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
 		ob.WriteByte('\n')
 	}
 
-	if options.flags & HTML_TOC != 0 {
+	if options.flags&HTML_TOC != 0 {
 		ob.WriteString(fmt.Sprintf("<h%d id=\"toc_%d\">", level, options.toc_data.header_count))
 		options.toc_data.header_count++
 	} else {
@@ -419,7 +419,7 @@ func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
 func rndr_link(ob *bytes.Buffer, link []byte, title []byte, content []byte, opaque interface{}) bool {
 	options, _ := opaque.(*html_renderopt)
 
-	if (options.flags & HTML_SAFELINK != 0) && !is_safe_link(link) {
+	if (options.flags&HTML_SAFELINK != 0) && !is_safe_link(link) {
 		return false
 	}
 
@@ -486,7 +486,7 @@ func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	}
 
 	ob.WriteString("<p>")
-	if options.flags & HTML_HARD_WRAP != 0 {
+	if options.flags&HTML_HARD_WRAP != 0 {
 		for i < size {
 			org := i
 			for i < size && text[i] != '\n' {
@@ -583,19 +583,19 @@ func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
 func rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 	options, _ := opaque.(*html_renderopt)
 
-	if options.flags & HTML_SKIP_HTML != 0 {
+	if options.flags&HTML_SKIP_HTML != 0 {
 		return true
 	}
 
-	if (options.flags & HTML_SKIP_STYLE != 0) && is_html_tag(text, "style") {
+	if (options.flags&HTML_SKIP_STYLE != 0) && is_html_tag(text, "style") {
 		return true
 	}
 
-	if (options.flags & HTML_SKIP_LINKS != 0) && is_html_tag(text, "a") {
+	if (options.flags&HTML_SKIP_LINKS != 0) && is_html_tag(text, "a") {
 		return true
 	}
 
-	if (options.flags & HTML_SKIP_IMAGES != 0) && is_html_tag(text, "img") {
+	if (options.flags&HTML_SKIP_IMAGES != 0) && is_html_tag(text, "img") {
 		return true
 	}
 
@@ -679,7 +679,7 @@ func toc_finalize(ob *bytes.Buffer, opaque interface{}) {
 
 	for options.toc_data.current_level > 1 {
 		ob.WriteString("</ul></li>\n")
-		options.toc_data.current_level--;
+		options.toc_data.current_level--
 	}
 
 	if options.toc_data.current_level > 0 {

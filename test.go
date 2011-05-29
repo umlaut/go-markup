@@ -16,7 +16,7 @@ var failed int
 
 func testStr(s string) {
 	html := markup.MarkdownToHtml(s, 0)
-	fmt.Printf("Result '%s' => '%s'\n",s, html)
+	fmt.Printf("Result '%s' => '%s'\n", s, html)
 }
 
 func testFile(basename string) {
@@ -54,11 +54,11 @@ func testFiles() {
 	for _, basename := range files {
 		testFile(basename)
 	}
-	fmt.Printf("Failed %d out of %d tests\n", failed, totalTested)	
+	fmt.Printf("Failed %d out of %d tests\n", failed, totalTested)
 }
 
 func testStrings() {
-	strings_to_test := []string{ "*	a", "foo", "_Hello World_!" }
+	strings_to_test := []string{"*	a", "foo", "_Hello World_!"}
 	for _, s := range strings_to_test {
 		testStr(s)
 	}
