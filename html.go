@@ -146,7 +146,7 @@ func isalnum(c byte) bool {
 }
 
 func (rndr *render) reachedNestingLimit() bool {
-	defer un(trace("reachedNestingLimit"))
+	//defer un(trace("reachedNestingLimit"))
 	return len(rndr.work_bufs[0])+len(rndr.work_bufs[1]) > rndr.max_nesting
 }
 

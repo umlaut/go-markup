@@ -58,7 +58,7 @@ func testFiles() {
 }
 
 func testStrings() {
-	strings_to_test := []string{"*	a", "foo", "_Hello World_!"}
+	strings_to_test := []string{"*\ta", "foo", "_Hello World_!"}
 	for _, s := range strings_to_test {
 		testStr(s)
 	}

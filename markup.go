@@ -2,7 +2,7 @@ package markup
 
 import (
 	"bytes"
-	//"fmt"
+	"fmt"
 )
 
 const (
@@ -69,14 +69,19 @@ func spaces(n int) string {
 	return string(r)
 }
 
+var dolog bool = true
+
 func trace(s string, args ...string) string {
 	funcNestLevel++
-	/*	sp := spaces(funcNestLevel * 2 - 2)
-		if len(args) > 0 {
-			fmt.Printf("%s%s(%s)\n", sp, s, args[0])
-		} else {
-			fmt.Printf("%s%s()\n", sp, s)
-		}*/
+	if !dolog {
+		return s
+	}
+	sp := spaces(funcNestLevel * 2 - 2)
+	if len(args) > 0 {
+		fmt.Printf("%s%s(%s)\n", sp, s, args[0])
+	} else {
+		fmt.Printf("%s%s()\n", sp, s)
+	}
 	return s
 }
 
@@ -87,7 +92,7 @@ func un(s string) {
 }
 
 func (rndr *render) newbuf(bufType int) (buf *bytes.Buffer) {
-	defer un(trace("newbuf"))
+	//defer un(trace("newbuf"))
 
 	buf = new(bytes.Buffer)
 	rndr.work_bufs[bufType] = append(rndr.work_bufs[bufType], buf)
@@ -95,7 +100,7 @@ func (rndr *render) newbuf(bufType int) (buf *bytes.Buffer) {
 }
 
 func (rndr *render) popbuf(bufType int) {
-	defer un(trace("popbuf"))
+	//defer un(trace("popbuf"))
 	rndr.work_bufs[bufType] = rndr.work_bufs[bufType][0 : len(rndr.work_bufs[bufType])-1]
 }
 
@@ -2353,7 +2358,7 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 			break
 		}
 		for {
-			ob.WriteByte('c')
+			ob.WriteByte(' ')
 			tab++
 			if tab%4 == 0 {
 				break
