@@ -1916,8 +1916,9 @@ func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool
 	return i
 }
 
-func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, columns int, col_data []int) {
+func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, col_data []int) {
 	size := len(data)
+	columns := len(col_data)
 	i := 0
 
 	row_work := rndr.newbuf(BUFFER_SPAN)
@@ -1971,6 +1972,95 @@ func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, columns int, c
 		rndr.make.table_row(ob, row_work.Bytes(), rndr.make.opaque)
 	}
 	rndr.popbuf(BUFFER_SPAN)
+}
+
+// return column_data_out as a second return arg
+func parse_table_header(ob *bytes.Buffer, rndr *render, data []byte, column_data_out *[]int) int {
+	size := len(data)
+
+	i := 0
+	pipes := 0
+	for i < size && data[i] != '\n' {
+		if data[i] == '|' {
+			pipes++
+		}
+		i++
+	}
+
+	if i == size || pipes == 0 {
+		return 0
+	}
+
+	header_end := i
+
+	if data[0] == '|' {
+		pipes--
+	}
+
+	if i > 2 && data[i - 1] == '|' {
+		pipes--
+	}
+
+	columns := pipes + 1
+	column_data := make([]int, columns, columns)
+	*column_data_out = column_data
+	/* Parse the header underline */
+	i++
+	if i < size && data[i] == '|' {
+		i++
+	}
+
+	under_end := i
+	for under_end < size && data[under_end] != '\n' {
+		under_end++
+	}
+
+	col := 0
+	for col = 0; col < columns && i < under_end; col++ {
+		dashes := 0
+
+		for i < under_end && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+
+		if data[i] == ':' {
+			i++
+			column_data[col] |= MKD_TABLE_ALIGN_L
+			dashes++
+		}
+
+		for i < under_end && data[i] == '-' {
+			i++
+			dashes++
+		}
+
+		if i < under_end && data[i] == ':' {
+			i++
+			column_data[col] |= MKD_TABLE_ALIGN_R
+			dashes++
+		}
+
+		for i < under_end && (data[i] == ' ' || data[i] == '\t') {
+			i++
+		}
+
+		if i < under_end && data[i] != '|' {
+			break
+		}
+
+		if dashes < 3 {
+			break			
+		}
+
+		i++
+	}
+
+	if col < columns {
+		return 0
+	}
+
+	parse_table_row(ob, rndr, data[:header_end], column_data)
+	return under_end + 1
 }
 
 // Returns whether a line is a reference or not
