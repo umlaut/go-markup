@@ -3,7 +3,6 @@ package markup
 import (
 	"bytes"
 	"fmt"
-	"strings"
 )
 
 const (
@@ -88,12 +87,11 @@ func (rndr *render) popbuf(bufType int) {
 	rndr.work_bufs[bufType] = rndr.work_bufs[bufType][0 : len(rndr.work_bufs[bufType])-1]
 }
 
-var block_tags []string = []string{"p", "dl", "h1", "h2", "h3", "h4", "h5", "h6", "ol", "ul", "del", "div", "ins", "pre", "form", "math", "table", "iframe", "script", "fieldset", "noscript", "blockquote"}
+var block_tags [][]byte = [][]byte{[]byte("p"), []byte("dl"), []byte("h1"), []byte("h2"), []byte("h3"), []byte("h4"), []byte("h5"), []byte("h6"), []byte("ol"), []byte("ul"), []byte("del"), []byte("div"), []byte("ins"), []byte("pre"), []byte("form"), []byte("math"), []byte("table"), []byte("iframe"), []byte("script"), []byte("fieldset"), []byte("noscript"), []byte("blockquote")}
 
-const (
-	INS_TAG = "ins"
-	DEL_TAG = "del"
-)
+
+var INS_TAG []byte = []byte("ins")
+var DEL_TAG []byte = []byte("del")
 
 /***************************
  * HELPER FUNCTIONS *
@@ -134,7 +132,7 @@ func unscape_text(ob *bytes.Buffer, src []byte) {
 /* returns the current block tag */
 /* TODO: speed it up by auto-generated optimized 
    comparison function that is a chain of ifs */
-func find_block_tag(data []byte) string {
+func find_block_tag(data []byte) (ret []byte) {
 	defer un(trace("find_block_tag"))
 	i := 0
 	size := len(data)
@@ -144,15 +142,15 @@ func find_block_tag(data []byte) string {
 		i++
 	}
 	if i == 0 || i >= size {
-		return ""
+		return
 	}
-	s := strings.ToLower(string(data[:i]))
+	s := bytes.ToLower(data[:i])
 	for _, tag := range block_tags {
-		if s == tag {
+		if bytes.Equal(s, tag) {
 			return s
 		}
 	}
-	return ""
+	return
 }
 
 /****************************
@@ -1812,6 +1810,112 @@ func htmlblock_end(tag []byte, rndr *render, data []byte) int {
 	return i + w
 }
 
+/* parsing of inline HTML block */
+func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool) int {
+	defer un(trace("parse_htmlblock"))
+	size := len(data)
+	i := 0
+	j := 0
+
+	/* identification of the opening tag */
+	if size < 2 || data[0] != '<' {
+		return 0
+	}
+	curtag := find_block_tag(data[1:])
+
+	/* handling of special cases */
+	if 0 == len(curtag) {
+
+		/* HTML comment, laxist form */
+		if size > 5 && data[1] == '!' && data[2] == '-' && data[3] == '-' {
+			i = 5
+
+			for i < size && !(data[i-2] == '-' && data[i-1] == '-' && data[i] == '>') {
+				i++
+			}
+
+			i++
+
+			if i < size {
+				j = is_empty(data[i:])
+			}
+
+			if j > 0 {
+				work_size := i + j
+				if do_render && nil != rndr.make.blockhtml {
+					rndr.make.blockhtml(ob, data[:work_size], rndr.make.opaque)
+				}
+				return work_size
+			}
+		}
+
+		/* HR, which is the only self-closing block tag considered */
+		if size > 4 && (data[1] == 'h' || data[1] == 'H') && (data[2] == 'r' || data[2] == 'R') {
+			i = 3
+			for i < size && data[i] != '>' {
+				i += 1
+			}
+
+			if i+1 < size {
+				i += 1
+				j = is_empty(data[i:])
+				if j > 0 {
+					work_size := i + j
+					if do_render  && nil != rndr.make.blockhtml {
+						// TODO: use i + j directly instead of work_size
+						rndr.make.blockhtml(ob, data[:work_size], rndr.make.opaque)
+					}
+					return work_size
+				}
+			}
+		}
+
+		/* no special case recognised */
+		return 0
+	}
+
+	/* looking for an unindented matching closing tag */
+	/*	followed by a blank line */
+	i = 1
+	found := false
+
+	/* if not found, trying a second pass looking for indented match */
+	/* but not if tag is "ins" or "del" (following original Markdown.pl) */
+	if !bytes.Equal(curtag, INS_TAG) && !bytes.Equal(curtag, DEL_TAG) {
+		i = 1
+		for i < size {
+			i++
+			for i < size && !(data[i-1] == '<' && data[i] == '/') {
+				i++
+			}
+
+			if i+2+len(curtag) >= size {
+				break
+			}
+
+			j = htmlblock_end(curtag, rndr, data[i-1:])
+
+			if j > 0 {
+				i += j - 1
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		return 0
+	}
+
+	/* the end of the block has been found */
+	if do_render && nil != rndr.make.blockhtml {
+		work_size := i
+		rndr.make.blockhtml(ob, data[:work_size], rndr.make.opaque) // TODO: just use i directly
+	}
+
+	return i
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
@@ -1988,114 +2092,6 @@ func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return 0
 }
 
-/* parsing of inline HTML block */
-func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool) int {
-	defer un(trace("parse_htmlblock"))
-	i := 0
-	j := 0
-	curtag := ""
-	size := len(data)
-
-	/* identification of the opening tag */
-	if size < 2 || data[0] != '<' {
-		return 0
-	}
-	curtag = find_block_tag(data[1:])
-
-	/* handling of special cases */
-	if 0 == len(curtag) {
-
-		/* HTML comment, laxist form */
-		if size > 5 && data[1] == '!' && data[2] == '-' && data[3] == '-' {
-			i = 5
-
-			for i < size && !(data[i-2] == '-' && data[i-1] == '-' && data[i] == '>') {
-				i++
-			}
-
-			i++
-
-			if i < size {
-				j = is_empty(data[i:])
-			}
-
-			if j > 0 {
-				work_size := i + j
-				if do_render {
-					work := bytes.NewBuffer(data[:work_size])
-					rndr.blockhtml(ob, work)
-				}
-				return work_size
-			}
-		}
-
-		/* HR, which is the only self-closing block tag considered */
-		if size > 4 && (data[1] == 'h' || data[1] == 'H') && (data[2] == 'r' || data[2] == 'R') {
-			i = 3
-			for i < size && data[i] != '>' {
-				i += 1
-			}
-
-			if i+1 < size {
-				i += 1
-				j = is_empty(data[i:])
-				if j > 0 {
-					work_size := i + j
-					if do_render {
-						work := bytes.NewBuffer(data[:work_size])
-						rndr.blockhtml(ob, work)
-					}
-					return work_size
-				}
-			}
-		}
-
-		/* no special case recognised */
-		return 0
-	}
-
-	/* looking for an unindented matching closing tag */
-	/*	followed by a blank line */
-	i = 1
-	found := false
-
-	/* if not found, trying a second pass looking for indented match */
-	/* but not if tag is "ins" or "del" (following original Markdown.pl) */
-	if curtag != INS_TAG && curtag != DEL_TAG {
-		i = 1
-		for i < size {
-			i++
-			for i < size && !(data[i-1] == '<' && data[i] == '/') {
-				i++
-			}
-
-			if i+2+len(curtag) >= size {
-				break
-			}
-
-			j = htmlblock_end(curtag, rndr, data[i-1:])
-
-			if j > 0 {
-				i += j - 1
-				found = true
-				break
-			}
-		}
-	}
-
-	if !found {
-		return 0
-	}
-
-	/* the end of the block has been found */
-	work_size := i
-	if do_render {
-		work := bytes.NewBuffer(data[:work_size])
-		rndr.blockhtml(ob, work)
-	}
-
-	return i
-}
 
 func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
 	defer un(trace("parse_block"))
