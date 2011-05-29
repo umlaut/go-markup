@@ -2063,6 +2063,43 @@ func parse_table_header(ob *bytes.Buffer, rndr *render, data []byte, column_data
 	return under_end + 1
 }
 
+func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
+	defer un(trace("parse_table"))
+	size := len(data)
+	header_work := rndr.newbuf(BUFFER_SPAN)
+	body_work := rndr.newbuf(BUFFER_BLOCK)
+	var col_data []int
+	i := parse_table_header(header_work, rndr, data, &col_data)
+	if i > 0 {
+		for i < size {
+			pipes := 0
+			row_start := i
+			for i < size && data[i] != '\n' {
+				if data[i] == '|' {
+					pipes++
+				}
+				i++
+			}
+
+			if pipes == 0 || i == size {
+				i = row_start
+				break
+			}
+
+			parse_table_row(body_work, rndr, data[row_start:], col_data)
+			i++
+		}
+
+		if nil != rndr.make.table {
+			rndr.make.table(ob, header_work.Bytes(), body_work.Bytes(), rndr.make.opaque)
+		}
+	}
+
+	rndr.popbuf(BUFFER_SPAN)
+	rndr.popbuf(BUFFER_BLOCK)
+	return i
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
@@ -2231,12 +2268,6 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 		}
 		i++
 	}
-}
-
-func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
-	defer un(trace("parse_table"))
-	// TODO: write me
-	return 0
 }
 
 
