@@ -41,9 +41,9 @@ func testCrashFile(basename string) {
 		fmt.Printf("Couldn't open '%s', error: %v\n", fn, err)
 		return
 	}
-	fmt.Printf("Testing: %s\n", fn)
+	//fmt.Printf("Testing: %s\n", fn)
 	html := clean(markup.MarkdownToHtml(string(src), 0))
-	fmt.Printf("got %d:\n", len(html))
+	//fmt.Printf("got %d:\n", len(html))
 	pprint(html)	
 }
 
@@ -97,15 +97,15 @@ func testFiles() {
 }
 
 func testStrings() {
-	strings_to_test := []string{"* 1\n* 2", "*ca", "*\ta", "foo", "_Hello World_!"}
+	strings_to_test := []string{"a***foo***", "b___bar___", "* 1\n* 2", "*ca", "*\ta", "foo", "_Hello World_!"}
 	for _, s := range strings_to_test {
 		testStr(s)
 	}
 }
 
 func main() {
-	testCrashFiles()
-	//testFiles()
+	//testCrashFiles()
+	testFiles()
 	//markup.UnitTest()
 	//testStrings()
 }

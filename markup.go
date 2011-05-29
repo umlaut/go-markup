@@ -565,7 +565,7 @@ func parse_emph3(ob *bytes.Buffer, rndr *render, dataorig []byte, iorig int, c b
 
 func char_emphasis(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_emphasis"))
-
+	data = data[offset:]
 	c := data[0]
 	size := len(data)
 	var ret int
