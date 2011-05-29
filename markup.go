@@ -1751,7 +1751,7 @@ func parse_list(ob *bytes.Buffer, rndr *render, data []byte, flags int) int {
 		//fmt.Printf("j: %d\n", j)
 		i += j
 
-		if 0 == j || (flags&MKD_LI_END == 0) {
+		if 0 == j || (flags&MKD_LI_END != 0) {
 			break
 		}
 	}
