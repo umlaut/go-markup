@@ -277,9 +277,7 @@ func tag_length(data []byte, autolink *int) int {
 /* parses inline markdown elements */
 func parse_inline(ob *bytes.Buffer, rndr *render, data []byte) {
 	defer un(trace("parse_inline"))
-
 	size := len(data)
-
 	if rndr.reachedNestingLimit() {
 		return
 	}
@@ -324,6 +322,7 @@ func parse_inline(ob *bytes.Buffer, rndr *render, data []byte) {
 
 /* looks for the next emph char, skipping other constructs */
 func find_emph_char(data []byte, c byte) int {
+	defer un(trace("find_emph_char"))
 	size := len(data)
 	i := 1
 
@@ -400,7 +399,7 @@ func find_emph_char(data []byte, c byte) int {
 /* parsing single emphase */
 /* closed by a symbol not preceded by whitespace and not followed by symbol */
 func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
-
+	defer un(trace("parse_emph1"))
 	if nil == rndr.make.emphasis {
 		return 0
 	}
@@ -452,8 +451,8 @@ func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 
 /* parsing single emphase */
 func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
+	defer un(trace("parse_emph2"))
 	var render_method rndrBufFunc_b
-
 	size := len(data)
 	if c == '~' {
 		render_method = rndr.make.strikethrough
@@ -491,11 +490,10 @@ func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 /* parsing single emphase */
 /* finds the first closing tag, and delegates to the other emph */
 func parse_emph3(ob *bytes.Buffer, rndr *render, dataorig []byte, iorig int, c byte) int {
-
+	defer un(trace("parse_emph3"))
 	data := dataorig[iorig:]
 	size := len(data)
 	i := 0
-
 	for i < size {
 		len := find_emph_char(data[i:], c)
 		if 0 == len {
@@ -743,7 +741,6 @@ func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) in
 
 func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_autolink"))
-	//struct buf work = { data, 0, 0, 0, 0 };
 	var copen byte
 
 	if offset > 0 {
@@ -1114,7 +1111,7 @@ cleanup:
 
 /* returns the line length when it is empty, 0 otherwise */
 func is_empty(data []byte) int {
-	defer un(trace("is_empty"))
+	//defer un(trace("is_empty"))
 	var i int
 	size := len(data)
 	for i = 0; i < size && data[i] != '\n'; i++ {
@@ -1127,7 +1124,7 @@ func is_empty(data []byte) int {
 
 /* returns whether a line is a horizontal rule */
 func is_hrule(data []byte) bool {
-	defer un(trace("is_hrule"))
+	//defer un(trace("is_hrule"))
 	size := len(data)
 	if size < 3 {
 		return false
@@ -1160,10 +1157,10 @@ func is_hrule(data []byte) bool {
 
 /* check if a line is a code fence; return its size if it is */
 func is_codefence(data []byte, syntax *[]byte) int {
+	//defer un(trace("is_codefence"))
+	size := len(data)
 	i := 0
 	n := 0
-	size := len(data)
-
 	/* skipping initial spaces */
 	if size < 3 {
 		return 0
@@ -1247,7 +1244,7 @@ func is_codefence(data []byte, syntax *[]byte) int {
 
 /* returns whether the line is a hash-prefixed header */
 func is_atxheader(rndr *render, data []byte) bool {
-	defer un(trace("is_atxheader"))
+	//defer un(trace("is_atxheader"))
 	if data[0] != '#' {
 		return false
 	}
@@ -1268,7 +1265,7 @@ func is_atxheader(rndr *render, data []byte) bool {
 
 /* returns whether the line is a setext-style hdr underline */
 func is_headerline(data []byte) int {
-	defer un(trace("is_headerline"))
+	//defer un(trace("is_headerline"))
 	i := 0
 	size := len(data)
 
@@ -1310,7 +1307,7 @@ func skip_spaces(data []byte, max int) int {
 }
 /* returns blockquote prefix length */
 func prefix_quote(data []byte) int {
-	defer un(trace("prefix_quote"))
+	//defer un(trace("prefix_quote"))
 	size := len(data)
 	i := skip_spaces(data, 3)
 	if i < size && data[i] == '>' {
@@ -1325,6 +1322,7 @@ func prefix_quote(data []byte) int {
 
 /* returns prefix length for block code*/
 func prefix_code(data []byte) int {
+	//defer un(trace("prefix_oli"))
 	size := len(data)
 	if size > 0 && data[0] == '\t' {
 		return 1
@@ -1337,6 +1335,7 @@ func prefix_code(data []byte) int {
 
 /* returns ordered list item prefix */
 func prefix_oli(data []byte) int {
+	//defer un(trace("prefix_oli"))
 	size := len(data)
 	i := 0
 	if i < size && data[i] == ' ' {
@@ -1552,9 +1551,9 @@ func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 }
 
 func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
+	defer un(trace("parse_blockcode"))
 	size := len(data)
 	work := rndr.newbuf(BUFFER_BLOCK)
-
 	beg := 0
 	end := 0
 	for beg < size {
@@ -1600,6 +1599,7 @@ func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 /* parse_listitem • parsing of a single list item */
 /*	assuming initial prefix is already removed */
 func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int {
+	defer un(trace("parse_listitem"))
 	size := len(data)
 	orgpre := 0
 	/* keeping track of the first indentation prefix */
@@ -1722,6 +1722,7 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 
 /* parsing ordered or unordered list block */
 func parse_list(ob *bytes.Buffer, rndr *render, data []byte, flags int) int {
+	defer un(trace("parse_list"))
 	size := len(data)
 	i := 0
 	work := rndr.newbuf(BUFFER_BLOCK)
@@ -1929,6 +1930,7 @@ func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool
 }
 
 func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, col_data []int) {
+	defer un(trace("parse_table_row"))
 	size := len(data)
 	columns := len(col_data)
 	i := 0
@@ -1988,8 +1990,8 @@ func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, col_data []int
 
 // return column_data_out as a second return arg
 func parse_table_header(ob *bytes.Buffer, rndr *render, data []byte, column_data_out *[]int) int {
+	defer un(trace("parse_table_header"))
 	size := len(data)
-
 	i := 0
 	pipes := 0
 	for i < size && data[i] != '\n' {
@@ -2114,7 +2116,6 @@ func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 
 func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
 	defer un(trace("parse_block"))
-	//fmt.Printf("parse_block:\n%s\n", string(data))
 	beg := 0
 
 	if rndr.reachedNestingLimit() {
@@ -2358,7 +2359,6 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 
 func ups_markdown_init(r *render, extensions uint) {
 	defer un(trace("ups_markdown_init"))
-
 	if nil != r.make.emphasis || nil != r.make.double_emphasis || nil != r.make.triple_emphasis {
 		r.active_char['*'] = MD_CHAR_EMPHASIS
 		r.active_char['_'] = MD_CHAR_EMPHASIS

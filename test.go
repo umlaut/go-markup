@@ -58,9 +58,13 @@ func testFiles() {
 }
 
 func testStrings() {
-	testStr("foo")
+	strings_to_test := []string{ "*	a", "foo", "_Hello World_!" }
+	for _, s := range strings_to_test {
+		testStr(s)
+	}
 }
 
 func main() {
+	//testFiles()
 	testStrings()
 }
