@@ -1916,6 +1916,63 @@ func parse_htmlblock(ob *bytes.Buffer, rndr *render, data []byte, do_render bool
 	return i
 }
 
+func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, columns int, col_data []int) {
+	size := len(data)
+	i := 0
+
+	row_work := rndr.newbuf(BUFFER_SPAN)
+
+	if i < size && data[i] == '|' {
+		i++
+	}
+
+	col := 0
+	for col = 0; col < columns && i < size; col++ {
+		cell_work := rndr.newbuf(BUFFER_SPAN);
+		for i < size && isspace(data[i]) {
+			i++
+		}
+
+		cell_start := i
+		for i < size && data[i] != '|' {
+			i++
+		}
+
+		cell_end := i - 1
+		for cell_end > cell_start && isspace(data[cell_end]) {
+			cell_end--
+		}
+
+		parse_inline(cell_work, rndr, data[cell_start:cell_end + 1]);
+		if nil != rndr.make.table_cell {
+			tmp := 0
+			if len(col_data) != 0 {
+				tmp = col_data[col]
+			}
+			rndr.make.table_cell(row_work, cell_work.Bytes(), tmp, rndr.make.opaque)
+		}
+
+		rndr.popbuf(BUFFER_SPAN)
+		i++
+	}
+
+	for ; col < columns; col++ {
+		var empty_cell []byte // TODO: should this be non-nil?
+		if nil != rndr.make.table_cell {
+			tmp := 0
+			if len(col_data) != 0 {
+				tmp = col_data[col]
+			}
+			rndr.make.table_cell(row_work, empty_cell, tmp, rndr.make.opaque)
+		}
+	}
+
+	if nil != rndr.make.table_row {
+		rndr.make.table_row(ob, row_work.Bytes(), rndr.make.opaque)
+	}
+	rndr.popbuf(BUFFER_SPAN)
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
