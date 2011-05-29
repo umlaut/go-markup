@@ -15,7 +15,7 @@ var totalTested int
 var failed int
 
 func testStr(s string) {
-	html := markup.MarkdownToHtml(s, nil)
+	html := markup.MarkdownToHtml(s, 0)
 	fmt.Printf("Result '%s' => '%s'\n",s, html)
 }
 
@@ -34,7 +34,7 @@ func testFile(basename string) {
 	}
 	totalTested++
 	s := string(srcdata)
-	html := markup.MarkdownToHtml(s, nil)
+	html := markup.MarkdownToHtml(s, 0)
 	htmlrefstr := string(refdata)
 	if html != htmlrefstr {
 		fmt.Printf("Fail: '%s'\n", basename)

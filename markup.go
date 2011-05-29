@@ -2,7 +2,7 @@ package markup
 
 import (
 	"bytes"
-	"fmt"
+	//"fmt"
 )
 
 const (
@@ -15,8 +15,9 @@ const (
 	BUFFER_BLOCK = iota
 	BUFFER_SPAN
 )
+
 const (
-	MKD_LI_END = 8	/* internal list flag */
+	MKD_LI_END = 8
 )
 
 type LinkRef struct {
@@ -39,10 +40,21 @@ const (
 
 type TriggerFunc func(ob *bytes.Buffer, rndr *render, data []byte, offset int) int
 
-var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, char_emphasis, char_codespan, char_linebreak, char_link, char_langle_tag, char_escape, char_entity, char_autolink}
+var markdown_char_ptrs []TriggerFunc = []TriggerFunc{nil, nil, nil, nil, nil, nil, nil, nil, nil}
+
+func init_markdown_char_ptrs() {
+	markdown_char_ptrs[MD_CHAR_EMPHASIS] = char_emphasis
+	markdown_char_ptrs[MD_CHAR_CODESPAN] = char_codespan
+	markdown_char_ptrs[MD_CHAR_LINEBREAK] = char_linebreak
+	markdown_char_ptrs[MD_CHAR_LINK] = char_link
+	markdown_char_ptrs[MD_CHAR_LANGLE] = char_langle_tag
+	markdown_char_ptrs[MD_CHAR_ESCAPE] = char_escape
+	markdown_char_ptrs[MD_CHAR_ENTITITY] = char_entity
+	markdown_char_ptrs[MD_CHAR_AUTOLINK] = char_autolink
+}
 
 type render struct {
-	make 		mkd_renderer
+	make 		*mkd_renderer
 	refs       	[]*LinkRef
 	active_char [256]byte
 	work_bufs 	[2][]*bytes.Buffer // indexed by BUFFER_BLOCK or BUFFER_SPAN
@@ -58,13 +70,13 @@ func spaces(n int) string {
 }
 
 func trace(s string, args ...string) string {
-	sp := spaces(funcNestLevel * 2)
 	funcNestLevel++
+/*	sp := spaces(funcNestLevel * 2 - 2)
 	if len(args) > 0 {
 		fmt.Printf("%s%s(%s)\n", sp, s, args[0])
 	} else {
 		fmt.Printf("%s%s()\n", sp, s)
-	}
+	}*/
 	return s
 }
 
@@ -2100,8 +2112,81 @@ func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return i
 }
 
+func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
+	defer un(trace("parse_block"))
+	//fmt.Printf("parse_block:\n%s\n", string(data))
+	beg := 0
+
+	if rndr.reachedNestingLimit() {
+		return
+	}
+
+	size := len(data)
+
+	for beg < size {
+		txt_data := data[beg:]
+		if is_atxheader(rndr, txt_data) {
+			beg += parse_atxheader(ob, rndr, txt_data)
+			continue
+		}
+		if data[beg] == '<' && rndr.make.blockhtml != nil {
+			if i := parse_htmlblock(ob, rndr, txt_data, true); i != 0 {
+				beg += i
+				continue
+			}
+		}
+		if i := is_empty(txt_data); i != 0 {
+			beg += i
+			continue
+		}
+		if is_hrule(txt_data) {
+			if nil != rndr.make.hrule {
+				rndr.make.hrule(ob, rndr.make.opaque)
+				for beg < size && data[beg] != '\n' {
+					beg++
+				}
+				beg++
+			}
+			continue
+		}
+		if rndr.ext_flags & MKDEXT_FENCED_CODE != 0  {
+			if i := parse_fencedcode(ob, rndr, txt_data); i != 0 {
+				beg += i
+				continue				
+			}
+		}
+		if rndr.ext_flags & MKDEXT_TABLES != 0 {
+			if i := parse_table(ob, rndr, txt_data); i != 0 {
+				beg += i
+				continue
+			}
+		}
+		if prefix_quote(txt_data) > 0 {
+			beg += parse_blockquote(ob, rndr, txt_data)
+			continue
+		}
+		if prefix_code(txt_data) > 0 {
+			beg += parse_blockcode(ob, rndr, txt_data)
+			continue
+		}
+		if prefix_uli(txt_data) > 0 {
+			beg += parse_list(ob, rndr, txt_data, 0)
+			continue
+		}
+		if prefix_oli(txt_data) > 0 {
+			beg += parse_list(ob, rndr, txt_data, MKD_LIST_ORDERED)
+			continue
+		}
+		beg += parse_paragraph(ob, rndr, txt_data)
+	}
+}
+
+/*********************
+ * REFERENCE PARSING *
+ *********************/
+
 // Returns whether a line is a reference or not
-func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
+func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef){
 	defer un(trace("is_ref"))
 	ref = false
 	last = 0 // doesn't matter unless ref is true
@@ -2232,6 +2317,7 @@ func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 
 	/* a valid ref has been found, filling-in return structures */
 	last = line_end
+	ref = true
 
 	lr = new(LinkRef)
 	lr.id = data[id_offset:id_end]
@@ -2270,71 +2356,10 @@ func expand_tabs(ob *bytes.Buffer, line []byte) {
 	}
 }
 
-
-func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
-	defer un(trace("parse_block"))
-	//fmt.Printf("parse_block:\n%s\n", string(data))
-	beg := 0
-
-	if rndr.reachedNestingLimit() {
-		return
-	}
-
-	size := len(data)
-
-	for beg < size {
-		txt_data := data[beg:]
-		//end := len(txt_data)
-		if is_atxheader(rndr, txt_data) {
-			beg += parse_atxheader(ob, rndr, txt_data)
-			continue
-		}
-		/* if (data[beg] == '<' && rndr->make.blockhtml &&
-			(i = parse_htmlblock(ob, rndr, txt_data, end, 1)) != 0)
-		beg += i;
-		continue
-		*/
-		if i := is_empty(txt_data); i != 0 {
-			beg += i
-			continue
-		}
-		if is_hrule(txt_data) {
-			/*
-							if (rndr->make.hrule)
-					rndr->make.hrule(ob, rndr->make.opaque);
-
-				while (beg < size && data[beg] != '\n')
-					beg++;
-
-				beg++
-			*/
-			continue
-		}
-		if rndr.options.ExtFencedCode {
-			i := parse_fencedcode(ob, rndr, txt_data)
-			if i > 0 {
-				beg += i
-				continue
-			}
-		}
-		if rndr.options.ExtTables {
-			i := parse_table(ob, rndr, txt_data)
-			if i > 0 {
-				beg += 1
-				continue
-			}
-		}
-		if prefix_quote(txt_data) > 0 {
-			beg += parse_blockquote(ob, rndr, txt_data)
-		}
-		beg += parse_paragraph(ob, rndr, txt_data)
-	}
-}
-
 func ups_markdown_init(r *render, extensions uint) {
 	defer un(trace("ups_markdown_init"))
 
-	if nil != r.make.emphasis || nil != rndrr.make.double_emphasis || nil != r.make.triple_emphasis {
+	if nil != r.make.emphasis || nil != r.make.double_emphasis || nil != r.make.triple_emphasis {
 		r.active_char['*'] = MD_CHAR_EMPHASIS
 		r.active_char['_'] = MD_CHAR_EMPHASIS
 		if extensions & MKDEXT_STRIKETHROUGH != 0 {
@@ -2372,14 +2397,16 @@ func ups_markdown_init(r *render, extensions uint) {
 
 	r.ext_flags = extensions
 	r.max_nesting = 16
-	return r
 }
 
 // TODO: a big change would be to use slices more directly rather than pass indexes
 func MarkdownToHtml(s string, options uint) string {
 	defer un(trace("MarkdownToHtml"))
-	rndr := upshtml_renderer(options)
-	ups_markdown_init(rndr, 0)
+	init_markdown_char_ptrs()
+
+	var rndr render
+	rndr.make = upshtml_renderer(options)
+	ups_markdown_init(&rndr, 0)
 
 	ib := []byte(s)
 	ob := new(bytes.Buffer)
@@ -2420,7 +2447,9 @@ func MarkdownToHtml(s string, options uint) string {
 	// TODO: sort renderer.refs
 
 	/* second pass: actual rendering */
-	rndr.docheader()
+	if rndr.make.doc_header != nil {
+		rndr.make.doc_header(ob, rndr.make.opaque)
+	}
 
 	if text.Len() > 0 {
 		/* adding a final newline if not already present */
@@ -2429,7 +2458,11 @@ func MarkdownToHtml(s string, options uint) string {
 			text.WriteByte('\n')
 		}
 
-		parse_block(ob, rndr, text.Bytes())
+		parse_block(ob, &rndr, text.Bytes())
+	}
+
+	if rndr.make.doc_footer != nil {
+		rndr.make.doc_footer(ob, rndr.make.opaque)
 	}
 
 	return string(ob.Bytes())
