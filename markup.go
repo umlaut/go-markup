@@ -1710,6 +1710,28 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 	return beg
 }
 
+/* parsing ordered or unordered list block */
+func parse_list(ob *bytes.Buffer, rndr *render, data []byte, flags int) int {
+	size := len(data)
+	i := 0
+	work := rndr.newbuf(BUFFER_BLOCK)
+
+	for i < size {
+		j := parse_listitem(work, rndr, data[i:], &flags)
+		i += j
+
+		if 0 == j || (flags & MKD_LI_END == 0) {
+			break
+		}
+	}
+
+	if nil != rndr.make.list {
+		rndr.make.list(ob, work.Bytes(), flags, rndr.make.opaque)
+	}
+	rndr.popbuf(BUFFER_BLOCK)
+	return i
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
