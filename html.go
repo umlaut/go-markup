@@ -228,6 +228,7 @@ func is_html_tag(tag []byte, tagname string) bool {
  * GENERIC RENDERER *
  ********************/
 func rndr_autolink(ob *bytes.Buffer, link []byte, typ int, opaque interface{}) bool {
+	defer un(trace("rndr_autolink"))
 	options, _ := opaque.(*html_renderopt)
 
 	size := len(link)
@@ -325,6 +326,7 @@ func rndr_blockcode(ob *bytes.Buffer, text []byte, lang []byte, opaque interface
  *		~~~~ {.python .numbered}	=>	<pre lang="python"><code>
  */
 func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte, opaque interface{}) {
+	defer un(trace("rndr_blockcode_github"))
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
@@ -357,12 +359,14 @@ func rndr_blockcode_github(ob *bytes.Buffer, text []byte, lang []byte, opaque in
 }
 
 func rndr_blockquote(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	defer un(trace("rndr_blockquote"))
 	ob.WriteString("<blockquote>\n")
 	ob.Write(text)
 	ob.WriteString("</blockquote>")
 }
 
 func rndr_codespan(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	defer un(trace("rndr_codespan"))
 	ob.WriteString("<code>")
 	attr_escape(ob, text)
 	ob.WriteString("</code>")
@@ -370,6 +374,7 @@ func rndr_codespan(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 }
 
 func rndr_strikethrough(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	defer un(trace("rndr_strikethrough"))
 	if len(text) == 0 {
 		return false
 	}
@@ -380,6 +385,7 @@ func rndr_strikethrough(ob *bytes.Buffer, text []byte, opaque interface{}) bool 
 }
 
 func rndr_double_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	defer un(trace("rndr_double_emphasis"))
 	if len(text) == 0 {
 		return false
 	}
@@ -390,6 +396,7 @@ func rndr_double_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) boo
 }
 
 func rndr_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	defer un(trace("rndr_emphasis"))
 	if len(text) == 0 {
 		return false
 	}
@@ -400,6 +407,7 @@ func rndr_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 }
 
 func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
+	defer un(trace("rndr_header"))
 	options, _ := opaque.(*html_renderopt)
 
 	if ob.Len() > 0 {
@@ -417,6 +425,7 @@ func rndr_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
 }
 
 func rndr_link(ob *bytes.Buffer, link []byte, title []byte, content []byte, opaque interface{}) bool {
+	defer un(trace("rndr_link"))
 	options, _ := opaque.(*html_renderopt)
 
 	if (options.flags&HTML_SAFELINK != 0) && !is_safe_link(link) {
@@ -436,6 +445,7 @@ func rndr_link(ob *bytes.Buffer, link []byte, title []byte, content []byte, opaq
 }
 
 func rndr_list(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
+	defer un(trace("rndr_list"))
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
@@ -454,6 +464,7 @@ func rndr_list(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
 }
 
 func rndr_listitem(ob *bytes.Buffer, text []byte, flags int, opaque interface{}) {
+	defer un(trace("rndr_listitem"))
 	ob.WriteString("<li>")
 	i := len(text)
 	for i > 0 && text[i-1] == '\n' {
@@ -464,6 +475,7 @@ func rndr_listitem(ob *bytes.Buffer, text []byte, flags int, opaque interface{})
 }
 
 func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	defer un(trace("rndr_paragraph"))
 	options, _ := opaque.(*html_renderopt)
 
 	i := 0
@@ -512,6 +524,7 @@ func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
 }
 
 func rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	defer un(trace("rndr_raw_block"))
 	if len(text) == 0 {
 		return
 	}
@@ -534,6 +547,7 @@ func rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{}) {
 }
 
 func rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	defer un(trace("rndr_triple_emphasis"))
 	if len(text) == 0 {
 		return false
 	}
@@ -544,6 +558,7 @@ func rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) boo
 }
 
 func rndr_hrule(ob *bytes.Buffer, opaque interface{}) {
+	defer un(trace("rndr_hrule"))
 	options, _ := opaque.(*html_renderopt)
 
 	if ob.Len() > 0 {
@@ -555,6 +570,7 @@ func rndr_hrule(ob *bytes.Buffer, opaque interface{}) {
 }
 
 func rndr_image(ob *bytes.Buffer, link []byte, title []byte, alt []byte, opaque interface{}) bool {
+	defer un(trace("rndr_image"))
 	options, _ := opaque.(*html_renderopt)
 	if len(link) == 0 {
 		return false
@@ -574,6 +590,7 @@ func rndr_image(ob *bytes.Buffer, link []byte, title []byte, alt []byte, opaque 
 }
 
 func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
+	defer un(trace("rndr_linebreak"))
 	options, _ := opaque.(*html_renderopt)
 	ob.WriteString("<br")
 	ob.WriteString(options.close_tag)
@@ -581,6 +598,7 @@ func rndr_linebreak(ob *bytes.Buffer, opaque interface{}) bool {
 }
 
 func rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
+	defer un(trace("rndr_raw_html"))
 	options, _ := opaque.(*html_renderopt)
 
 	if options.flags&HTML_SKIP_HTML != 0 {
@@ -604,6 +622,7 @@ func rndr_raw_html(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
 }
 
 func rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{}) {
+	defer un(trace("rndr_table"))
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
@@ -615,6 +634,7 @@ func rndr_table(ob *bytes.Buffer, header []byte, body []byte, opaque interface{}
 }
 
 func rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	defer un(trace("rndr_tablerow"))
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
@@ -624,6 +644,7 @@ func rndr_tablerow(ob *bytes.Buffer, text []byte, opaque interface{}) {
 }
 
 func rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{}) {
+	defer un(trace("rndr_tablecell"))
 	if ob.Len() > 0 {
 		ob.WriteByte('\n')
 	}
@@ -646,10 +667,12 @@ func rndr_tablecell(ob *bytes.Buffer, text []byte, align int, opaque interface{}
 }
 
 func rndr_normal_text(ob *bytes.Buffer, text []byte, opaque interface{}) {
+	defer un(trace("rndr_normal_text"))
 	attr_escape(ob, text)
 }
 
 func toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
+	defer un(trace("toc_header"))
 	options, _ := opaque.(*html_renderopt)
 
 	for level > options.toc_data.current_level {
@@ -675,6 +698,7 @@ func toc_header(ob *bytes.Buffer, text []byte, level int, opaque interface{}) {
 }
 
 func toc_finalize(ob *bytes.Buffer, opaque interface{}) {
+	defer un(trace("toc_finalize"))
 	options, _ := opaque.(*html_renderopt)
 
 	for options.toc_data.current_level > 1 {

@@ -5,6 +5,7 @@ import (
 	"markup"
 	"path/filepath"
 	"io/ioutil"
+	"strings"
 )
 
 const (
@@ -14,9 +15,16 @@ const (
 var totalTested int
 var failed int
 
+func pprint(s string) {
+	s = strings.Replace(s, "\n", "\\n", -1)
+	s = strings.Replace(s, "\t", "\\t", -1)
+	fmt.Printf("%s\n", s)
+}
+
 func testStr(s string) {
 	html := markup.MarkdownToHtml(s, 0)
-	fmt.Printf("Result '%s' => '%s'\n", s, html)
+	pprint(s)
+	pprint(html)
 }
 
 func testFile(basename string) {
@@ -58,7 +66,7 @@ func testFiles() {
 }
 
 func testStrings() {
-	strings_to_test := []string{"*\ta", "foo", "_Hello World_!"}
+	strings_to_test := []string{"*ca", "*\ta", "foo", "_Hello World_!"}
 	for _, s := range strings_to_test {
 		testStr(s)
 	}
