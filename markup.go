@@ -1622,6 +1622,7 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 	}
 
 	beg := prefix_uli(data)
+	//fmt.Printf("beg 1: %d\n", beg)
 	if 0 == beg {
 		beg = prefix_oli(data)
 	}
@@ -1643,6 +1644,7 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 	/* putting the first line into the working buffer */
 	work.Write(data[beg:end])
 	beg = end
+	//fmt.Printf("beg 2: %d\n", beg)
 
 	in_empty := false
 	has_inside_empty := false
@@ -1656,15 +1658,16 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 		}
 
 		/* process an empty line */
-		if 0 == is_empty(data[beg:end]) {
+		if is_empty(data[beg:end]) > 0 {
 			in_empty = true
 			beg = end
+			//fmt.Printf("beg 3: %d\n", beg)
 			continue
 		}
 
 		/* calculating the indentation */
 		i := 0
-		for i < 4 && beg+i < end && data[beg+i] == ' ' {
+		for i < 4 && (beg+i < end) && data[beg+i] == ' ' {
 			i++
 		}
 
@@ -1675,7 +1678,7 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 		}
 
 		/* checking for a new item */
-		if (prefix_uli(data[beg+i:end]) > 0 && !is_hrule(data[beg+i:end])) || prefix_oli(data[beg+i:]) > 0 {
+		if (prefix_uli(data[beg+i:end]) > 0 && !is_hrule(data[beg+i:end])) || prefix_oli(data[beg+i:end]) > 0 {
 			if in_empty {
 				has_inside_empty = true
 			}
@@ -1700,6 +1703,7 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 		/* adding the line without prefix into the working buffer */
 		work.Write(data[beg+i : end-beg-i])
 		beg = end
+		//fmt.Printf("beg 4: %d\n", beg)
 	}
 
 	/* render of li contents */
@@ -1731,6 +1735,7 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 	}
 	rndr.popbuf(BUFFER_SPAN)
 	rndr.popbuf(BUFFER_SPAN)
+	//fmt.Printf("beg 5: %d\n", beg)
 	return beg
 }
 
@@ -1743,6 +1748,7 @@ func parse_list(ob *bytes.Buffer, rndr *render, data []byte, flags int) int {
 
 	for i < size {
 		j := parse_listitem(work, rndr, data[i:], &flags)
+		//fmt.Printf("j: %d\n", j)
 		i += j
 
 		if 0 == j || (flags&MKD_LI_END == 0) {

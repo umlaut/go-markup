@@ -16,9 +16,11 @@ var totalTested int
 var failed int
 
 func pprint(s string) {
-	s = strings.Replace(s, "\n", "\\n", -1)
-	s = strings.Replace(s, "\t", "\\t", -1)
-	fmt.Printf("%s\n", s)
+	s = strings.Replace(s, "\n", `\n`, -1)
+	s = strings.Replace(s, "\t", `\t`, -1)
+	fmt.Print(s)
+	fmt.Print("\n")
+	//fmt.Printf("%s\n", s)
 }
 
 func testStr(s string) {
@@ -28,27 +30,29 @@ func testStr(s string) {
 }
 
 func testFile(basename string) {
-	src := filepath.Join(testFilesDir, basename+".text")
-	htmlref := filepath.Join(testFilesDir, basename+"_upskirt_ref.html")
-	srcdata, err := ioutil.ReadFile(src)
+	fn := filepath.Join(testFilesDir, basename+".text")
+	src, err := ioutil.ReadFile(fn)
 	if err != nil {
-		fmt.Printf("Couldn't open '%s', error: %v\n", src, err)
+		fmt.Printf("Couldn't open '%s', error: %v\n", fn, err)
 		return
 	}
-	refdata, err := ioutil.ReadFile(htmlref)
+	fn = filepath.Join(testFilesDir, basename+"_upskirt_ref.html")
+	ref, err := ioutil.ReadFile(fn)
 	if err != nil {
-		fmt.Printf("Couldn't open '%s', error: %v\n", htmlref, err)
+		fmt.Printf("Couldn't open '%s', error: %v\n", fn, err)
 		return
 	}
 	totalTested++
-	s := string(srcdata)
-	html := markup.MarkdownToHtml(s, 0)
-	htmlrefstr := string(refdata)
-	if html != htmlrefstr {
+	html := markup.MarkdownToHtml(string(src), 0)
+	htmlref := string(ref)
+	if html != htmlref {
 		fmt.Printf("Fail: '%s'\n", basename)
 		failed++
-		fmt.Printf("Got:\n%s\n", html)
-		fmt.Printf("Expected:\n%s\n", htmlrefstr)
+		fmt.Printf("exp %d:\n", len(htmlref))
+		pprint(htmlref)
+		fmt.Println(htmlref)
+		fmt.Printf("got %d:", len(html))
+		pprint(html)
 	} else {
 		fmt.Printf("Ok: '%s'\n", basename)
 	}
@@ -66,7 +70,7 @@ func testFiles() {
 }
 
 func testStrings() {
-	strings_to_test := []string{"*ca", "*\ta", "foo", "_Hello World_!"}
+	strings_to_test := []string{"* 1\n* 2", "*ca", "*\ta", "foo", "_Hello World_!"}
 	for _, s := range strings_to_test {
 		testStr(s)
 	}
@@ -74,6 +78,6 @@ func testStrings() {
 
 func main() {
 	//testFiles()
-	markup.UnitTest()
+	//markup.UnitTest()
 	testStrings()
 }
