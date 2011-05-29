@@ -1587,6 +1587,129 @@ func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 	return beg;
 }
 
+/* parse_listitem • parsing of a single list item */
+/*	assuming initial prefix is already removed */
+func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int {
+	size := len(data)
+	orgpre := 0
+	/* keeping track of the first indentation prefix */
+	for orgpre < 3 && orgpre < size && data[orgpre] == ' ' {
+		orgpre++
+	}
+
+	beg := prefix_uli(data)
+	if 0 == beg {
+		beg = prefix_oli(data)
+	}
+
+	if 0 == beg {
+		return 0
+	}
+
+	/* skipping to the beginning of the following line */
+	end := beg
+	for end < size && data[end - 1] != '\n' {
+		end++
+	}
+
+	/* getting working buffers */
+	work := rndr.newbuf(BUFFER_SPAN)
+	inter := rndr.newbuf(BUFFER_SPAN)
+
+	/* putting the first line into the working buffer */
+	work.Write(data[beg:end])
+	beg = end
+
+	in_empty := false
+	has_inside_empty := false
+	sublist := 0
+	/* process the following lines */
+	for beg < size {
+		end++
+
+		for end < size && data[end - 1] != '\n' {
+			end++
+		}
+
+		/* process an empty line */
+		if 0 == is_empty(data[beg:end]) {
+			in_empty = true
+			beg = end
+			continue
+		}
+
+		/* calculating the indentation */
+		i := 0
+		for i < 4 && beg + i < end && data[beg + i] == ' ' {
+			i++
+		}
+
+		pre := i
+		if data[beg] == '\t' {
+			i = 1
+			pre = 8
+		}
+
+		/* checking for a new item */
+		if (prefix_uli(data[beg + i:end]) > 0  && !is_hrule(data[beg + i:end])) || prefix_oli(data[beg + i:]) > 0 {
+			if in_empty {
+				has_inside_empty = true
+			}
+			if pre == orgpre { /* the following item must have */
+				break             /* the same indentation */
+			}
+
+			if 0 == sublist {
+				sublist = work.Len()
+			}
+		} else if in_empty && i < 4 && data[beg] != '\t' {
+		/* joining only indented stuff after empty lines */
+				*flags |= MKD_LI_END
+				break
+		} else if in_empty {
+			work.WriteByte('\n')
+			has_inside_empty = true
+		}
+
+		in_empty = false
+
+		/* adding the line without prefix into the working buffer */
+		work.Write(data[beg+i:end-beg-i])
+		beg = end
+	}
+
+	/* render of li contents */
+	if has_inside_empty {
+		*flags |= MKD_LI_BLOCK
+	}
+
+	if *flags & MKD_LI_BLOCK != 0 {
+		/* intermediate render of block li */
+		if sublist > 0 && sublist < work.Len() {
+			parse_block(inter, rndr, work.Bytes()[:sublist])
+			parse_block(inter, rndr, work.Bytes()[sublist:])
+		} else {
+			parse_block(inter, rndr, work.Bytes())
+		}
+	} else {
+		/* intermediate render of inline li */
+		if sublist > 0 && sublist < work.Len() {
+			parse_inline(inter, rndr, work.Bytes()[:sublist])
+			parse_block(inter, rndr, work.Bytes()[sublist:])
+		} else {
+			parse_inline(inter, rndr, work.Bytes())
+		}
+	}
+
+	/* render of li itself */
+	if nil != rndr.make.listitem {
+		rndr.make.listitem(ob, inter.Bytes(), *flags, rndr.make.opaque)
+	}
+	rndr.popbuf(BUFFER_SPAN)
+	rndr.popbuf(BUFFER_SPAN)
+	return beg
+}
+
 // Returns whether a line is a reference or not
 func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
 	defer un(trace("is_ref"))
