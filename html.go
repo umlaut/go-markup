@@ -55,53 +55,42 @@ type html_renderopt struct {
 	close_tag string
 }
 
-type rndrFunc func(*bytes.Buffer, interface{})
-type rndrBufFunc func(*bytes.Buffer, []byte, interface{})
-type rndrBufBufFunc func(*bytes.Buffer, []byte, []byte, interface{})
-type rndBufIntFunc func(*bytes.Buffer, []byte, int, interface{})
-
-type rndrFunc_b func(*bytes.Buffer, interface{}) bool
-type rndrBufFunc_b func(*bytes.Buffer, []byte, interface{}) bool
-type rndBufIntFunc_b func(*bytes.Buffer, []byte, int, interface{}) bool
-type rndrBufBufFunc_b func(*bytes.Buffer, []byte, []byte, interface{}) bool
-type rndrBufBufBufFunc_b func(*bytes.Buffer, []byte, []byte, []byte, interface{}) bool
-
-/* functions for rendering parsed data */
+// functions for rendering parsed data
 type mkd_renderer struct {
-	/* block level callbacks - NULL skips the block */
-	blockcode  rndrBufBufFunc
-	blockquote rndrBufFunc
-	blockhtml  rndrBufFunc
-	header     rndBufIntFunc
-	hrule      rndrFunc
-	list       rndBufIntFunc
-	listitem   rndBufIntFunc
-	paragraph  rndrBufFunc
-	table      rndrBufBufFunc
-	table_row  rndrBufFunc
-	table_cell rndBufIntFunc
+	// block level callbacks - NULL skips the block
+	blockcode  		func(*bytes.Buffer, []byte, []byte, interface{})
+	blockquote 		func(*bytes.Buffer, []byte, interface{})
+	blockhtml  		func(*bytes.Buffer, []byte, interface{})
+	header     		func(*bytes.Buffer, []byte, int, interface{})
+	hrule      		func(*bytes.Buffer, interface{})
+	list       		func(*bytes.Buffer, []byte, int, interface{})
+	listitem   		func(*bytes.Buffer, []byte, int, interface{})
+	paragraph  		func(*bytes.Buffer, []byte, interface{})
+	table      		func(*bytes.Buffer, []byte, []byte, interface{})
+	table_row  		func(*bytes.Buffer, []byte, interface{})
+	table_cell 		func(*bytes.Buffer, []byte, int, interface{})
 
-	/* span level callbacks - NULL or return 0 prints the span verbatim */
-	autolink        rndBufIntFunc_b
-	codespan        rndrBufFunc_b
-	double_emphasis rndrBufFunc_b
-	emphasis        rndrBufFunc_b
-	image           rndrBufBufBufFunc_b
-	linebreak       rndrFunc_b
-	link            rndrBufBufBufFunc_b
-	raw_html_tag    rndrBufFunc_b
-	triple_emphasis rndrBufFunc_b
-	strikethrough   rndrBufFunc_b
+	// span level callbacks - NULL or return 0 prints the span verbatim
+	autolink        func(*bytes.Buffer, []byte, int, interface{}) bool
+	codespan        func(*bytes.Buffer, []byte, interface{}) bool
+	double_emphasis func(*bytes.Buffer, []byte, interface{}) bool
+	emphasis        func(*bytes.Buffer, []byte, interface{}) bool
+	image           func(*bytes.Buffer, []byte, []byte, []byte, interface{}) bool
+	linebreak       func(*bytes.Buffer, interface{}) bool
+	link            func(*bytes.Buffer, []byte, []byte, []byte, interface{}) bool
+	raw_html_tag    func(*bytes.Buffer, []byte, interface{}) bool
+	triple_emphasis func(*bytes.Buffer, []byte, interface{}) bool
+	strikethrough   func(*bytes.Buffer, []byte, interface{}) bool
 
-	/* low level callbacks - NULL copies input directly into the output */
-	entity      rndrBufFunc
-	normal_text rndrBufFunc
+	// low level callbacks - NULL copies input directly into the output
+	entity      	func(*bytes.Buffer, []byte, interface{})
+	normal_text 	func(*bytes.Buffer, []byte, interface{})
 
-	/* header and footer */
-	doc_header rndrFunc
-	doc_footer rndrFunc
+	// header and footer
+	doc_header 		func(*bytes.Buffer, interface{})
+	doc_footer 		func(*bytes.Buffer, interface{})
 
-	/* user data */
+	// user data
 	opaque interface{}
 }
 

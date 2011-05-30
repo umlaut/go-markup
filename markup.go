@@ -493,7 +493,7 @@ func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 /* parsing single emphase */
 func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 	defer un(trace("parse_emph2"))
-	var render_method rndrBufFunc_b
+	var render_method func(*bytes.Buffer, []byte, interface{}) bool
 	size := len(data)
 	if c == '~' {
 		render_method = rndr.make.strikethrough
