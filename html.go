@@ -510,25 +510,20 @@ func rndr_paragraph(ob *bytes.Buffer, text []byte, opaque interface{}) {
 
 func rndr_raw_block(ob *bytes.Buffer, text []byte, opaque interface{}) {
 	defer un(trace("rndr_raw_block"))
-	if len(text) == 0 {
-		return
-	}
 	sz := len(text)
 	for sz > 0 && text[sz-1] == '\n' {
 		sz -= 1
 	}
 	org := 0
-	for org < sz && text[org] == '\n' {
-		org += 1
+	for ; org < sz && text[org] == '\n'; org++ {
 	}
-	if org >= sz {
-		return
-	}
-	if ob.Len() > 0 {
+	if org < sz {
+		if ob.Len() > 0 {
+			ob.WriteByte('\n')
+		}
+		ob.Write(text[org:sz])
 		ob.WriteByte('\n')
 	}
-	ob.Write(text[org:sz])
-	ob.WriteByte('\n')
 }
 
 func rndr_triple_emphasis(ob *bytes.Buffer, text []byte, opaque interface{}) bool {
