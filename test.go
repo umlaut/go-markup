@@ -117,7 +117,7 @@ func testFiles() {
 }
 
 func testStrings() {
-	strings_to_test := []string{"a [b][].\n  [b]: /url/ \"T \"qu\" ins\"", "5 > 6", "a***foo***", "b___bar___", "* 1\n* 2", "*ca", "*\ta", "foo", "_Hello World_!"}
+	strings_to_test := []string{"l: <http://f.com/>.", "a [b][].\n  [b]: /url/ \"T \"qu\" ins\"", "5 > 6", "a***foo***", "b___bar___", "* 1\n* 2", "*ca", "*\ta", "foo", "_Hello World_!"}
 	for _, s := range strings_to_test {
 		testStr(s)
 	}
