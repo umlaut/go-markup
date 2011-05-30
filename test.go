@@ -19,6 +19,11 @@ func pprint(s string) {
 	s = strings.Replace(s, "\n", `\n`, -1)
 	s = strings.Replace(s, "\r", `\r`, -1)
 	s = strings.Replace(s, "\t", `\t`, -1)
+	b := []byte(s)
+	if len(b) > 360 {
+		b = b[:360]
+	}
+	s = string(b)
 	fmt.Print(s)
 	fmt.Print("\n")
 	//fmt.Printf("%s\n", s)
@@ -47,19 +52,19 @@ func testCrashFile(basename string) {
 	pprint(html)
 }
 
-func testFile(basename string) {
+func testFile(basename string) bool {
 	fn := filepath.Join(testFilesDir, basename+".text")
 	src, err := ioutil.ReadFile(fn)
 	if err != nil {
 		fmt.Printf("Couldn't open '%s', error: %v\n", fn, err)
-		return
+		return false
 	}
-	fmt.Printf("Testing: %s\n", fn)
+	//fmt.Printf("Testing: %s\n", fn)
 	fn = filepath.Join(testFilesDir, basename+"_upskirt_ref.html")
 	ref, err := ioutil.ReadFile(fn)
 	if err != nil {
 		fmt.Printf("Couldn't open '%s', error: %v\n", fn, err)
-		return
+		return false
 	}
 	totalTested++
 	html := clean(string(markup.MarkdownToHtml(src, 0)))
@@ -70,12 +75,15 @@ func testFile(basename string) {
 
 		fmt.Printf("exp %d:\n", len(htmlref))
 		pprint(htmlref)
+		fmt.Printf("\n")
 
 		fmt.Printf("got %d:\n", len(html))
 		pprint(html)
-	} else {
-		fmt.Printf("Ok: '%s'\n", basename)
-	}
+		fmt.Printf("\n\n")
+		return false
+	} 
+	//fmt.Printf("Ok: '%s'\n", basename)
+	return true
 }
 
 func testCrashFiles() {
@@ -86,14 +94,26 @@ func testCrashFiles() {
 }
 
 func testFiles() {
-	files := []string{"a", "Amps and angle encoding", "Auto links", "Backslash escapes", "Blockquotes with code blocks", "Code Blocks", "Code Spans", "Hard-wrapped paragraphs with list-like lines", "Horizontal rules", "Inline HTML (Advanced)", "Inline HTML (Simple)", "Inline HTML comments", "Links, inline style", "Links, reference style", "Links, shortcut references", "Literal quotes in titles", "Markdown Documentation - Basics", "Markdown Documentation - Syntax", "Nested blockquotes", "Ordered and unordered lists", "Strong and em together", "Tabs", "Tidyness"}
+	files := []string{"Amps and angle encoding", "Auto links", "Backslash escapes", "Blockquotes with code blocks", "Code Blocks", "Code Spans", "Hard-wrapped paragraphs with list-like lines", "Horizontal rules", "Inline HTML (Advanced)", "Inline HTML (Simple)", "Inline HTML comments", "Links, inline style", "Links, reference style", "Links, shortcut references", "Literal quotes in titles", "Markdown Documentation - Basics", "Markdown Documentation - Syntax", "Nested blockquotes", "Ordered and unordered lists", "Strong and em together", "Tabs", "Tidyness"}
 
-	totalTested = 0
-	failed = 0
+	failed := make([]string, 0, len(files))
+	succeded := make([]string, 0, len(files))
 	for _, basename := range files {
-		testFile(basename)
+		ok := testFile(basename)
+		if !ok {
+			failed = append(failed, basename)		
+		} else {
+			succeded = append(succeded, basename)		
+		}
 	}
-	fmt.Printf("Failed %d out of %d tests\n", failed, totalTested)
+	for _, s := range succeded {
+		fmt.Printf("ok: %s\n", s)
+	}
+	for _, s := range failed {
+		fmt.Printf("failed: %s\n", s)
+	}
+	totalTested := len(failed) + len(succeded)
+	fmt.Printf("Failed %d out of %d tests\n", len(failed), totalTested)
 }
 
 func testStrings() {
