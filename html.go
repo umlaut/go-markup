@@ -139,34 +139,37 @@ func isalnum(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')
 }
 
-/* copy the buffer entity-escaping '<', '>', '&' and '"' */
+var (
+    esc_quot = []byte("&quot;")
+    esc_amp  = []byte("&amp;")
+    esc_lt   = []byte("&lt;")
+    esc_gt   = []byte("&gt;")
+)
+
+// copy the buffer entity-escaping '<', '>', '&' and '"'
+// TODO: should also escape ' (as &apos;) ?
 func attr_escape(ob *bytes.Buffer, src []byte) {
 	defer un(trace("attr_escape"))
-	for i := 0; i < len(src); i++ {
-		// directly copy normal characters
-		org := i
-		for i < len(src) && src[i] != '<' && src[i] != '>' && src[i] != '&' && src[i] != '"' {
-			i++
-		}
-		if i > org {
-			ob.Write(src[org:i])
-		}
-
-		// escape a character
-		if i >= len(src) {
-			break
-		}
-		switch src[i] {
-		case '<':
-			ob.WriteString("&lt;")
-		case '>':
-			ob.WriteString("&gt;")
-		case '&':
-			ob.WriteString("&amp;")
-		case '"':
-			ob.WriteString("&quot;")
-		}
-	}
+	var esc []byte
+    last := 0
+    for i, c := range src {
+        switch c {
+        case '<':
+            esc = esc_lt
+        case '>':
+            esc = esc_gt
+        case '"':
+            esc = esc_quot
+        case '&':
+            esc = esc_amp
+        default:
+            continue
+        }
+        ob.Write(src[last:i])
+        ob.Write(esc)
+        last = i + 1
+    }
+    ob.Write(src[last:])
 }
 
 func is_html_tag(tag []byte, tagname string) bool {
