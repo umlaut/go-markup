@@ -144,40 +144,33 @@ func (rndr *render) reachedNestingLimit() bool {
 	return len(rndr.work_bufs[0])+len(rndr.work_bufs[1]) > rndr.max_nesting
 }
 
-func put_scaped_char(ob *bytes.Buffer, c byte) {
-	switch {
-	case c == '<':
-		ob.WriteString("&lt;")
-	case c == '>':
-		ob.WriteString("&gt;")
-	case c == '&':
-		ob.WriteString("&amp;")
-	case c == '"':
-		ob.WriteString("&quot;")
-	default:
-		ob.WriteByte(c)
-	}
-}
-
 /* copy the buffer entity-escaping '<', '>', '&' and '"' */
 func attr_escape(ob *bytes.Buffer, src []byte) {
 	defer un(trace("attr_escape"))
-	size := len(src)
-	for i := 0; i < size; i++ {
-		/* copying directly unescaped characters */
+	for i := 0; i < len(src); i++ {
+		// directly copy normal characters
 		org := i
-		for i < size && src[i] != '<' && src[i] != '>' && src[i] != '&' && src[i] != '"' {
-			i += 1
+		for i < len(src) && src[i] != '<' && src[i] != '>' && src[i] != '&' && src[i] != '"' {
+			i++
 		}
 		if i > org {
-			ob.Write(src[org:])
+			ob.Write(src[org:i])
 		}
 
-		/* escaping */
-		if i >= size {
+		// escape a character
+		if i >= len(src) {
 			break
 		}
-		put_scaped_char(ob, src[i])
+		switch src[i] {
+		case '<':
+			ob.WriteString("&lt;")
+		case '>':
+			ob.WriteString("&gt;")
+		case '&':
+			ob.WriteString("&amp;")
+		case '"':
+			ob.WriteString("&quot;")
+		}
 	}
 }
 

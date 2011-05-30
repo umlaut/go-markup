@@ -894,12 +894,6 @@ func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 	return len(work)
 }
 
-func (rndr *render) find_ref(id []byte) *LinkRef {
-	//TODO: write me
-	//arr_sorted_find(&rndr->refs, &id, cmp_link_ref)
-	return nil
-}
-
 /* '[': parsing a link or an image */
 func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_link"))
