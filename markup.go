@@ -22,7 +22,6 @@ const (
 )
 
 type LinkRef struct {
-	id    []byte
 	link  []byte
 	title []byte
 }
@@ -56,7 +55,7 @@ func init_markdown_char_ptrs() {
 
 type render struct {
 	make        *mkd_renderer
-	refs        []*LinkRef
+	refs        map[string]*LinkRef
 	active_char [256]byte
 	work_bufs   [2][]*bytes.Buffer // indexed by BUFFER_BLOCK or BUFFER_SPAN
 	ext_flags   uint
@@ -904,29 +903,17 @@ func (rndr *render) find_ref(id []byte) *LinkRef {
 /* '[': parsing a link or an image */
 func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_link"))
-	is_img := false
-
-	if offset > 0 && data[offset-1] == '!' {
-		is_img = true
-	}
-
-	var content *bytes.Buffer
-	var title *bytes.Buffer
-	var u_link *bytes.Buffer
-
-	org_work_size := len(rndr.work_bufs[BUFFER_SPAN])
-
-	ret := false
+	is_img := offset > 0 && data[offset-1] == '!'
+	var title, link []byte
 
 	/* checking whether the correct renderer exists */
-	if (is_img && nil != rndr.make.image) || (!is_img && nil != rndr.make.link) {
-		goto cleanup
+	if (is_img && rndr.make.image == nil) || (!is_img && rndr.make.link == nil) {
+		return 0
 	}
 
 	data = data[offset:]
 	size := len(data)
 
-	var link *bytes.Buffer
 	i := 1
 	text_has_nl := false
 	/* looking for the matching closing bracket */
@@ -946,14 +933,14 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	}
 
 	if i >= size {
-		goto cleanup
+		return 0
 	}
 
 	txt_e := i
-	i += 1
+	i++
 
-	/* skip any amount of whitespace or newline */
-	/* (this is much more laxist than original markdown syntax) */
+	// skip any amount of whitespace or newline
+	// (this is much more laxist than original markdown syntax)
 	for i < size && isspace(data[i]) {
 		i++
 	}
@@ -963,10 +950,10 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	title_b := 0
 	title_e := 0
 
-	/* inline style link */
+	// inline style link
 	if i < size && data[i] == '(' {
-		/* skipping initial whitespace */
-		i += 1
+		// skipping initial whitespace
+		i++
 
 		for i < size && isspace(data[i]) {
 			i++
@@ -981,12 +968,12 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 			} else if data[i] == ')' || data[i] == '\'' || data[i] == '"' {
 				break
 			} else {
-				i += 1
+				i++
 			}
 		}
 
 		if i >= size {
-			goto cleanup
+			return 0
 		}
 		link_e = i
 
@@ -1001,12 +988,12 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 				} else if data[i] == ')' {
 					break
 				} else {
-					i += 1
+					i++
 				}
 			}
 
 			if i >= size {
-				goto cleanup
+				return 0
 			}
 
 			/* skipping whitespaces after title */
@@ -1038,20 +1025,17 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 
 		/* building escaped link and title */
 		if link_e > link_b {
-			link = rndr.newbuf(BUFFER_SPAN)
-			link.Write(data[link_b:link_e])
+			link = data[link_b:link_e]
 		}
 
 		if title_e > title_b {
-			title = rndr.newbuf(BUFFER_SPAN)
-			title.Write(data[title_b:title_e])
+			title = data[title_b:title_e]
 		}
 
 		i++
 	} else if i < size && data[i] == '[' {
 		/* reference style link */
 		var id []byte
-		var lr *LinkRef
 
 		/* looking for the id */
 		i += 1
@@ -1060,14 +1044,14 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 			i++
 		}
 		if i >= size {
-			goto cleanup
+			return 0
 		}
 		link_e = i
 
 		/* finding the link_ref */
 		if link_b == link_e {
 			if text_has_nl {
-				b := rndr.newbuf(BUFFER_SPAN)
+				b := bytes.NewBuffer(nil)
 
 				for j := 1; j < txt_e; j++ {
 					if data[j] != '\n' {
@@ -1085,24 +1069,23 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 			id = data[link_b:link_e]
 		}
 
-		lr = rndr.find_ref(id)
-		if nil == lr {
-			goto cleanup
+		key := string(bytes.ToLower(id))
+		lr, ok := rndr.refs[key]
+		if !ok {
+			return 0
 		}
 
-		/* keeping link and title from link_ref */
-		// TODO: not sure if that's righ
-		link = bytes.NewBuffer(lr.link)
-		title = bytes.NewBuffer(lr.title)
-		i += 1
+		// keeping link and title from link_ref
+		link = lr.link
+		title = lr.title
+		i++
 	} else {
 		/* shortcut reference style link */
 		var id []byte
-		var lr *LinkRef
 
 		/* crafting the id */
 		if text_has_nl {
-			b := rndr.newbuf(BUFFER_SPAN)
+			b := bytes.NewBuffer(nil)
 			for j := 1; j < txt_e; j++ {
 				if data[j] != '\n' {
 					b.WriteByte(data[j])
@@ -1116,24 +1099,24 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 			id = data[1:txt_e]
 		}
 
-		/* finding the link_ref */
-		lr = rndr.find_ref(id)
-		if nil == lr {
-			goto cleanup
+		// find the reference with matching id
+		key := string(bytes.ToLower(id))
+		lr, ok := rndr.refs[key]
+		if !ok {
+			return 0
 		}
 
-		/* keeping link and title from link_ref */
-		// TODO: not sure if bytes.NewBuffer() is right
-		link = bytes.NewBuffer(lr.link)
-		title = bytes.NewBuffer(lr.title)
+		// keep link and title from reference
+		link = lr.link
+		title = lr.title
 
-		/* rewinding the whitespace */
+		// rewinding the whitespace
 		i = txt_e + 1
 	}
 
-	/* building content: img alt is escaped, link content is parsed */
+	// building content: img alt is escaped, link content is parsed 
+	content := bytes.NewBuffer(nil)
 	if txt_e > 1 {
-		content = rndr.newbuf(BUFFER_SPAN)
 		if is_img {
 			content.Write(data[1:txt_e])
 		} else {
@@ -1141,24 +1124,22 @@ func char_link(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 		}
 	}
 
-	if nil != link {
-		u_link = rndr.newbuf(BUFFER_SPAN)
-		unscape_text(u_link, link.Bytes())
+	var u_link []byte
+	if len(link) > 0 {
+		u_link_buf := bytes.NewBuffer(nil)
+		unscape_text(u_link_buf, link)
+		u_link = u_link_buf.Bytes()
 	}
 
 	/* calling the relevant rendering function */
+	ret := false
 	if is_img {
 		remove_from_end(ob, '!')
-		ret = rndr.make.image(ob, u_link.Bytes(), title.Bytes(), content.Bytes(), rndr.make.opaque)
+		ret = rndr.make.image(ob, u_link, title, content.Bytes(), rndr.make.opaque)
 	} else {
-		ret = rndr.make.link(ob, u_link.Bytes(), title.Bytes(), content.Bytes(), rndr.make.opaque)
+		ret = rndr.make.link(ob, u_link, title, content.Bytes(), rndr.make.opaque)
 	}
 
-	/* cleanup */
-cleanup:
-	for org_work_size > len(rndr.work_bufs[BUFFER_SPAN]) {
-		rndr.popbuf(BUFFER_SPAN)
-	}
 	if ret {
 		return i
 	}
@@ -2247,146 +2228,137 @@ func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
  *********************/
 
 // Returns whether a line is a reference or not
-func is_ref(data []byte, beg, end int) (ref bool, last int, lr *LinkRef) {
+func is_ref(rndr *render, data []byte) int {
 	//defer un(trace("is_ref"))
-	ref = false
-	last = 0 // doesn't matter unless ref is true
-
+	size := len(data)
+	if size < 4 {
+		return 0
+	}
 	i := 0
-	if beg+3 >= end {
-		return
+	for i < 3 && data[i] == ' ' {
+		i++
 	}
-	if data[beg] == ' ' {
-		i = 1
-		if data[beg+1] == ' ' {
-			i = 2
-			if data[beg+2] == ' ' {
-				i = 3
-				if data[beg+3] == ' ' {
-					return
-				}
-			}
-		}
+	if data[i] == ' ' {
+		return 0
 	}
-	i += beg
 
 	/* id part: anything but a newline between brackets */
 	if data[i] != '[' {
-		return
+		return 0
 	}
 	i++
 	id_offset := i
-	for i < end && data[i] != '\n' && data[i] != '\r' && data[i] != ']' {
+	for i < size && data[i] != '\n' && data[i] != '\r' && data[i] != ']' {
 		i++
 	}
-	if i >= end || data[i] != ']' {
-		return
+	if i >= size || data[i] != ']' {
+		return 0
 	}
 	id_end := i
 
 	/* spacer: colon (space | tab)* newline? (space | tab)* */
 	i++
-	if i >= end || data[i] != ':' {
-		return
+	if i >= size || data[i] != ':' {
+		return 0
 	}
-	i += 1
-	for i < end && (data[i] == ' ' || data[i] == '\t') {
-		i += 1
+	i++
+	for i < size && (data[i] == ' ' || data[i] == '\t') {
+		i++
 	}
-	if i < end && (data[i] == '\n' || data[i] == '\r') {
-		i += 1
-		if i < end && data[i] == '\r' && data[i-1] == '\n' {
-			i += 1
+	if i < size && (data[i] == '\n' || data[i] == '\r') {
+		i++
+		if i < size && (data[i] == '\r' && data[i-1] == '\n') { // TODO: blackfriday has \n then \r
+			i++
 		}
 	}
-	for i < end && (data[i] == ' ' || data[i] == '\t') {
+	for i < size && (data[i] == ' ' || data[i] == '\t') {
 		i += 1
 	}
-	if i >= end {
-		return
+	if i >= size {
+		return 0
 	}
 
 	/* link: whitespace-free sequence, optionally between angle brackets */
 	if data[i] == '<' {
-		i += 1
+		i++
 	}
 
 	link_offset := i
-	for i < end && data[i] != ' ' && data[i] != '\t' && data[i] != '\n' && data[i] != '\r' {
-		i += 1
+	for i < size && data[i] != ' ' && data[i] != '\t' && data[i] != '\n' && data[i] != '\r' {
+		i++
 	}
-
 	link_end := i
-	if data[i-1] == '>' {
-		link_end = i - 1
+	if data[link_offset] == '<' && data[link_end-1] == '>' {
+		link_offset++
+		link_end--
 	}
 
 	/* optional spacer: (space | tab)* (newline | '\'' | '"' | '(' ) */
-	for i < end && (data[i] == ' ' || data[i] == '\t') {
-		i += 1
+	for i < size && (data[i] == ' ' || data[i] == '\t') {
+		i++
 	}
 
-	if i < end && data[i] != '\n' && data[i] != '\r' && data[i] != '\'' && data[i] != '"' && data[i] != '(' {
-		return
+	if i < size && data[i] != '\n' && data[i] != '\r' && data[i] != '\'' && data[i] != '"' && data[i] != '(' {
+		return 0
 	}
-	line_end := 0
+
 	/* computing end-of-line */
-	if i >= end || data[i] == '\r' || data[i] == '\n' {
+	line_end := 0
+	if i >= size || data[i] == '\r' || data[i] == '\n' {
 		line_end = i
 	}
-	if i+1 < end && data[i] == '\n' && data[i+1] == '\r' {
-		line_end = i + 1
+	if i+1 < size && data[i] == '\n' && data[i+1] == '\r' {  // blackfriday has \r then \n
+		line_end++
 	}
 
-	/* optional (space|tab)* spacer after a newline */
+	// optional (space|tab)* spacer after a newline
 	if line_end > 0 {
 		i = line_end + 1
-		for i < end && (data[i] == ' ' || data[i] == '\t') {
+		for i < size && (data[i] == ' ' || data[i] == '\t') {
 			i++
 		}
 	}
 
-	/* optional title: any non-newline sequence enclosed in '"()
-	alone on its line */
-	title_offset := 0
-	title_end := 0
-	if i+1 < end && (data[i] == '\'' || data[i] == '"' || data[i] == '(') {
-		i += 1
+	// optional title: any non-newline sequence enclosed in '"() alone on its line
+	title_offset, title_end := 0, 0
+	if i+1 < size && (data[i] == '\'' || data[i] == '"' || data[i] == '(') {
+		i++
 		title_offset = i
-		/* looking for EOL */
-		for i < end && data[i] != '\n' && data[i] != '\r' {
-			i += 1
+
+		// look for EOL
+		for i < size && data[i] != '\n' && data[i] != '\r' {
+			i++
 		}
-		if i+1 < end && data[i] == '\n' && data[i+1] == '\r' {
+		if i+1 < size && data[i] == '\n' && data[i+1] == '\r' {
 			title_end = i + 1
 		} else {
 			title_end = i
 		}
-		/* stepping back */
+
+		// step back
 		i -= 1
 		for i > title_offset && (data[i] == ' ' || data[i] == '\t') {
-			i -= 1
+			i--
 		}
 		if i > title_offset && (data[i] == '\'' || data[i] == '"' || data[i] == ')') {
 			line_end = title_end
 			title_end = i
 		}
 	}
-	if line_end == 0 {
-		return /* garbage after the link */
+	if line_end == 0 { // garbage after the link
+		return 0
 	}
 
 	/* a valid ref has been found, filling-in return structures */
-	last = line_end
-	ref = true
-
-	lr = new(LinkRef)
-	lr.id = data[id_offset:id_end]
-	lr.link = data[link_offset:link_end]
-	if title_end > title_offset {
-		lr.title = data[title_offset:title_end]
+	if rndr != nil {
+		id := string(bytes.ToLower(data[id_offset:id_end]))
+		rndr.refs[id] = &LinkRef{
+			link:  data[link_offset:link_end],
+			title: data[title_offset:title_end],
+		}	
 	}
-	return
+
+	return line_end
 }
 
 func expand_tabs(ob *bytes.Buffer, line []byte) {
@@ -2453,14 +2425,13 @@ func ups_markdown_init(r *render, extensions uint) {
 		r.active_char['m'] = MD_CHAR_AUTOLINK // mailto
 		r.active_char['M'] = MD_CHAR_AUTOLINK
 	}
-	r.refs = make([]*LinkRef, 16)
+	r.refs = make(map[string]*LinkRef)
 
 	r.ext_flags = extensions
 	r.max_nesting = 16
 }
 
-// TODO: a big change would be to use slices more directly rather than pass indexes
-func MarkdownToHtml(s string, options uint) string {
+func MarkdownToHtml(ib[] byte, options uint) []byte {
 	defer un(trace("MarkdownToHtml"))
 	init_markdown_char_ptrs()
 
@@ -2468,22 +2439,16 @@ func MarkdownToHtml(s string, options uint) string {
 	rndr.make = upshtml_renderer(options)
 	ups_markdown_init(&rndr, 0)
 
-	ib := []byte(s)
-	ob := new(bytes.Buffer)
-	text := new(bytes.Buffer)
-
+	text := bytes.NewBuffer(nil)
 	/* first pass: looking for references, copying everything else */
-	beg := 0
+	beg, end := 0, 0
 	for beg < len(ib) {
-		if isRef, last, ref := is_ref(ib, beg, len(ib)); isRef {
-			beg = last
-			if nil != ref {
-				rndr.refs = append(rndr.refs, ref)
-			}
+		if end = is_ref(&rndr, ib[beg:]); end > 0 {
+			beg += end
 		} else { /* skipping to the next line */
-			end := beg
+			end = beg
 			for end < len(ib) && ib[end] != '\n' && ib[end] != '\r' {
-				end += 1
+				end++
 			}
 
 			/* adding the line body if present */
@@ -2496,17 +2461,15 @@ func MarkdownToHtml(s string, options uint) string {
 				if ib[end] == '\n' || (end+1 < len(ib) && ib[end+1] != '\n') {
 					text.WriteByte('\n')
 				}
-				end += 1
+				end++
 			}
 
 			beg = end
 		}
 	}
 
-	/* sorting the reference array */
-	// TODO: sort renderer.refs
-
 	/* second pass: actual rendering */
+	ob := bytes.NewBuffer(nil)
 	if rndr.make.doc_header != nil {
 		rndr.make.doc_header(ob, rndr.make.opaque)
 	}
@@ -2521,7 +2484,7 @@ func MarkdownToHtml(s string, options uint) string {
 		rndr.make.doc_footer(ob, rndr.make.opaque)
 	}
 
-	return string(ob.Bytes())
+	return ob.Bytes()
 }
 
 func UnitTest() {
