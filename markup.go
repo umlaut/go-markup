@@ -716,9 +716,10 @@ func char_codespan(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 	return end
 }
 
+var escape_chars = []byte("\\`*_{}[]()#+-.!:|&<>")
+
 func char_escape(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_escape"))
-	escape_chars := []byte("\\`*_{}[]()#+-.!:|&<>")
 
 	data = data[offset:]
 	size := len(data)

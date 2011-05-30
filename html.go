@@ -121,28 +121,22 @@ func writeInTag(ob *bytes.Buffer, text *bytes.Buffer, tag string) {
 }*/
 
 
-// TODO: what other chars are space?
 func isspace(c byte) bool {
-	return c == ' '
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'
 }
 
-// TODO: what other chars are punctutation
+// TODO: perf, use bitmap check
 func ispunct(c byte) bool {
-	if c == '.' {
-		return true
+	for _, r := range []byte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~") {
+		if c == r {
+			return true
+		}
 	}
 	return false
 }
 
 func isalnum(c byte) bool {
-	if c >= '0' && c <= '9' {
-		return true
-	}
-	if c >= 'A' && c <= 'Z' {
-		return true
-	}
-
-	return c >= 'a' && c <= 'z'
+	return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')
 }
 
 func (rndr *render) reachedNestingLimit() bool {
