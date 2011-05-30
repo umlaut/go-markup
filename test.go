@@ -81,7 +81,7 @@ func testFile(basename string) bool {
 		pprint(html)
 		fmt.Printf("\n\n")
 		return false
-	} 
+	}
 	//fmt.Printf("Ok: '%s'\n", basename)
 	return true
 }
@@ -101,9 +101,9 @@ func testFiles() {
 	for _, basename := range files {
 		ok := testFile(basename)
 		if !ok {
-			failed = append(failed, basename)		
+			failed = append(failed, basename)
 		} else {
-			succeded = append(succeded, basename)		
+			succeded = append(succeded, basename)
 		}
 	}
 	for _, s := range succeded {

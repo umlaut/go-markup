@@ -109,7 +109,7 @@ func is_nl2(c byte) bool {
 func remove_from_end(b *bytes.Buffer, c byte) {
 	d := b.Bytes()
 	if len(d) > 0 && d[len(d)-1] == 'c' {
-		b.Truncate(b.Len()-1)
+		b.Truncate(b.Len() - 1)
 	}
 }
 
@@ -761,7 +761,7 @@ func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) in
 	if end > 2 {
 		if rndr.make.autolink != nil && altype != MKDA_NOT_AUTOLINK {
 			u_link := bytes.NewBuffer(nil)
-			unscape_text(u_link, data[1 : end-1])
+			unscape_text(u_link, data[1:end-1])
 			ret = rndr.make.autolink(ob, u_link.Bytes(), altype, rndr.make.opaque)
 		} else if rndr.make.raw_html_tag != nil {
 			ret = rndr.make.raw_html_tag(ob, data[:end], rndr.make.opaque)
@@ -2257,7 +2257,7 @@ func is_ref(rndr *render, data []byte) int {
 	if i >= size || data[i] == '\r' || data[i] == '\n' {
 		line_end = i
 	}
-	if i+1 < size && data[i] == '\n' && data[i+1] == '\r' {  // blackfriday has \r then \n
+	if i+1 < size && data[i] == '\n' && data[i+1] == '\r' { // blackfriday has \r then \n
 		line_end++
 	}
 
@@ -2305,7 +2305,7 @@ func is_ref(rndr *render, data []byte) int {
 		rndr.refs[id] = &LinkRef{
 			link:  data[link_offset:link_end],
 			title: data[title_offset:title_end],
-		}	
+		}
 	}
 
 	return line_end
@@ -2381,7 +2381,7 @@ func ups_markdown_init(r *render, extensions uint) {
 	r.max_nesting = 16
 }
 
-func MarkdownToHtml(ib[] byte, options uint) []byte {
+func MarkdownToHtml(ib []byte, options uint) []byte {
 	defer un(trace("MarkdownToHtml"))
 	init_markdown_char_ptrs()
 

@@ -140,10 +140,10 @@ func isalnum(c byte) bool {
 }
 
 var (
-    esc_quot = []byte("&quot;")
-    esc_amp  = []byte("&amp;")
-    esc_lt   = []byte("&lt;")
-    esc_gt   = []byte("&gt;")
+	esc_quot = []byte("&quot;")
+	esc_amp  = []byte("&amp;")
+	esc_lt   = []byte("&lt;")
+	esc_gt   = []byte("&gt;")
 )
 
 // copy the buffer entity-escaping '<', '>', '&' and '"'
@@ -151,25 +151,25 @@ var (
 func attr_escape(ob *bytes.Buffer, src []byte) {
 	defer un(trace("attr_escape"))
 	var esc []byte
-    last := 0
-    for i, c := range src {
-        switch c {
-        case '<':
-            esc = esc_lt
-        case '>':
-            esc = esc_gt
-        case '"':
-            esc = esc_quot
-        case '&':
-            esc = esc_amp
-        default:
-            continue
-        }
-        ob.Write(src[last:i])
-        ob.Write(esc)
-        last = i + 1
-    }
-    ob.Write(src[last:])
+	last := 0
+	for i, c := range src {
+		switch c {
+		case '<':
+			esc = esc_lt
+		case '>':
+			esc = esc_gt
+		case '"':
+			esc = esc_quot
+		case '&':
+			esc = esc_amp
+		default:
+			continue
+		}
+		ob.Write(src[last:i])
+		ob.Write(esc)
+		last = i + 1
+	}
+	ob.Write(src[last:])
 }
 
 func is_html_tag(tag []byte, tagname string) bool {
