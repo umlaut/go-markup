@@ -139,11 +139,6 @@ func isalnum(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')
 }
 
-func (rndr *render) reachedNestingLimit() bool {
-	//defer un(trace("reachedNestingLimit"))
-	return len(rndr.work_bufs[0])+len(rndr.work_bufs[1]) > rndr.max_nesting
-}
-
 /* copy the buffer entity-escaping '<', '>', '&' and '"' */
 func attr_escape(ob *bytes.Buffer, src []byte) {
 	defer un(trace("attr_escape"))

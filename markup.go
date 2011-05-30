@@ -13,11 +13,6 @@ const (
 )
 
 const (
-	BUFFER_BLOCK = iota
-	BUFFER_SPAN
-)
-
-const (
 	MKD_LI_END = 8
 )
 
@@ -57,8 +52,8 @@ type render struct {
 	make        *mkd_renderer
 	refs        map[string]*LinkRef
 	active_char [256]byte
-	work_bufs   [2][]*bytes.Buffer // indexed by BUFFER_BLOCK or BUFFER_SPAN
 	ext_flags   uint
+	nesting     int
 	max_nesting int
 }
 
@@ -137,19 +132,6 @@ func trim_right(b *bytes.Buffer, c byte) {
 	if trim_count > 0 {
 		b.Truncate(len(d) - trim_count)
 	}
-}
-
-func (rndr *render) newbuf(bufType int) (buf *bytes.Buffer) {
-	//defer un(trace("newbuf"))
-
-	buf = new(bytes.Buffer)
-	rndr.work_bufs[bufType] = append(rndr.work_bufs[bufType], buf)
-	return buf
-}
-
-func (rndr *render) popbuf(bufType int) {
-	//defer un(trace("popbuf"))
-	rndr.work_bufs[bufType] = rndr.work_bufs[bufType][0 : len(rndr.work_bufs[bufType])-1]
 }
 
 var block_tags [][]byte = [][]byte{[]byte("p"), []byte("dl"), []byte("h1"), []byte("h2"), []byte("h3"), []byte("h4"), []byte("h5"), []byte("h6"), []byte("ol"), []byte("ul"), []byte("del"), []byte("div"), []byte("ins"), []byte("pre"), []byte("form"), []byte("math"), []byte("table"), []byte("iframe"), []byte("script"), []byte("fieldset"), []byte("noscript"), []byte("blockquote")}
@@ -332,9 +314,12 @@ func tag_length(data []byte, autolink *int) int {
 func parse_inline(ob *bytes.Buffer, rndr *render, data []byte) {
 	defer un(trace("parse_inline"))
 	size := len(data)
-	if rndr.reachedNestingLimit() {
+
+	if rndr.nesting > rndr.max_nesting {
 		return
 	}
+	rndr.nesting++
+	defer func() { rndr.nesting-- }()
 
 	var action byte = 0
 	i := 0
@@ -491,10 +476,9 @@ func parse_emph1(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 				}
 			}
 
-			work := rndr.newbuf(BUFFER_SPAN)
+			work := bytes.NewBuffer(nil)
 			parse_inline(work, rndr, data[:i])
 			r := rndr.make.emphasis(ob, work.Bytes(), rndr.make.opaque)
-			rndr.popbuf(BUFFER_SPAN)
 			if r {
 				return i + 1
 			} else {
@@ -529,10 +513,9 @@ func parse_emph2(ob *bytes.Buffer, rndr *render, data []byte, c byte) int {
 		i += len
 
 		if i+1 < size && data[i] == c && data[i+1] == c && i > 0 && !isspace(data[i-1]) {
-			work := rndr.newbuf(BUFFER_SPAN)
+			work := bytes.NewBuffer(nil)
 			parse_inline(work, rndr, data[:i])
 			r := render_method(ob, work.Bytes(), rndr.make.opaque)
-			rndr.popbuf(BUFFER_SPAN)
 			if r {
 				return i + 2
 			} else {
@@ -565,10 +548,9 @@ func parse_emph3(ob *bytes.Buffer, rndr *render, dataorig []byte, iorig int, c b
 
 		if i+2 < size && data[i+1] == c && data[i+2] == c && nil != rndr.make.triple_emphasis {
 			/* triple symbol found */
-			work := rndr.newbuf(BUFFER_SPAN)
+			work := bytes.NewBuffer(nil)
 			parse_inline(work, rndr, data[:i])
 			r := rndr.make.triple_emphasis(ob, work.Bytes(), rndr.make.opaque)
-			rndr.popbuf(BUFFER_SPAN)
 			if r {
 				return i + 3
 			} else {
@@ -879,11 +861,9 @@ func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 	work := data[:link_end]
 
 	if rndr.make.autolink != nil {
-		u_link := rndr.newbuf(BUFFER_SPAN)
+		u_link := bytes.NewBuffer(nil)
 		unscape_text(u_link, work)
-
 		rndr.make.autolink(ob, u_link.Bytes(), MKDA_NORMAL, rndr.make.opaque)
-		rndr.popbuf(BUFFER_SPAN)
 	}
 
 	return len(work)
@@ -1433,13 +1413,11 @@ func parse_blockquote(ob *bytes.Buffer, rndr *render, data []byte) int {
 		beg = end
 	}
 
-	out := rndr.newbuf(BUFFER_BLOCK)
+	out := bytes.NewBuffer(nil)
 	parse_block(out, rndr, work_data)
 	if nil != rndr.make.blockquote {
 		rndr.make.blockquote(ob, out.Bytes(), rndr.make.opaque)
 	}
-
-	rndr.popbuf(BUFFER_BLOCK)
 	return end
 }
 
@@ -1485,12 +1463,11 @@ func parse_paragraph(ob *bytes.Buffer, rndr *render, data []byte) int {
 	work := data
 
 	if 0 == level {
-		tmp := rndr.newbuf(BUFFER_BLOCK)
+		tmp := bytes.NewBuffer(nil)
 		parse_inline(tmp, rndr, data[:work_size])
 		if nil != rndr.make.paragraph {
 			rndr.make.paragraph(ob, tmp.Bytes(), rndr.make.opaque)
 		}
-		rndr.popbuf(BUFFER_BLOCK)
 	} else {
 		if work_size > 0 {
 			i = work_size
@@ -1506,28 +1483,22 @@ func parse_paragraph(ob *bytes.Buffer, rndr *render, data []byte) int {
 			}
 
 			if work_size > 0 {
-				tmp := rndr.newbuf(BUFFER_BLOCK)
+				tmp := bytes.NewBuffer(nil)
 				parse_inline(tmp, rndr, work[:size])
-
 				if rndr.make.paragraph != nil {
 					rndr.make.paragraph(ob, tmp.Bytes(), rndr.make.opaque)
 				}
-
-				rndr.popbuf(BUFFER_BLOCK)
 				work = work[beg:i]
 			} else {
 				work = work[:i]
 			}
 		}
 
-		header_work := rndr.newbuf(BUFFER_SPAN)
+		header_work := bytes.NewBuffer(nil)
 		parse_inline(header_work, rndr, work)
-
 		if nil != rndr.make.header {
 			rndr.make.header(ob, header_work.Bytes(), level, rndr.make.opaque)
 		}
-
-		rndr.popbuf(BUFFER_SPAN)
 	}
 	return end
 }
@@ -1542,7 +1513,7 @@ func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 		return 0
 	}
 	end := 0
-	work := rndr.newbuf(BUFFER_BLOCK)
+	work := bytes.NewBuffer(nil)
 	for beg < size {
 		fence_end := is_codefence(data[beg:], nil)
 		if fence_end != 0 {
@@ -1571,15 +1542,13 @@ func parse_fencedcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 	if nil != rndr.make.blockcode {
 		rndr.make.blockcode(ob, work.Bytes(), lang, rndr.make.opaque)
 	}
-
-	rndr.popbuf(BUFFER_BLOCK)
 	return beg
 }
 
 func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_blockcode"))
 	size := len(data)
-	work := rndr.newbuf(BUFFER_BLOCK)
+	work := bytes.NewBuffer(nil)
 	beg := 0
 	end := 0
 	for beg < size {
@@ -1614,7 +1583,6 @@ func parse_blockcode(ob *bytes.Buffer, rndr *render, data []byte) int {
 		var emptySlice []byte
 		rndr.make.blockcode(ob, work.Bytes(), emptySlice, rndr.make.opaque)
 	}
-	rndr.popbuf(BUFFER_BLOCK)
 	return beg
 }
 
@@ -1648,8 +1616,8 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 	}
 
 	/* getting working buffers */
-	work := rndr.newbuf(BUFFER_SPAN)
-	inter := rndr.newbuf(BUFFER_SPAN)
+	work := bytes.NewBuffer(nil)
+	inter := bytes.NewBuffer(nil)
 
 	/* putting the first line into the working buffer */
 	work.Write(data[beg:end])
@@ -1743,8 +1711,6 @@ func parse_listitem(ob *bytes.Buffer, rndr *render, data []byte, flags *int) int
 	if nil != rndr.make.listitem {
 		rndr.make.listitem(ob, inter.Bytes(), *flags, rndr.make.opaque)
 	}
-	rndr.popbuf(BUFFER_SPAN)
-	rndr.popbuf(BUFFER_SPAN)
 	//fmt.Printf("beg 5: %d\n", beg)
 	return beg
 }
@@ -1754,7 +1720,7 @@ func parse_list(ob *bytes.Buffer, rndr *render, data []byte, flags int) int {
 	defer un(trace("parse_list"))
 	size := len(data)
 	i := 0
-	work := rndr.newbuf(BUFFER_BLOCK)
+	work := bytes.NewBuffer(nil)
 
 	for i < size {
 		j := parse_listitem(work, rndr, data[i:], &flags)
@@ -1769,7 +1735,6 @@ func parse_list(ob *bytes.Buffer, rndr *render, data []byte, flags int) int {
 	if nil != rndr.make.list {
 		rndr.make.list(ob, work.Bytes(), flags, rndr.make.opaque)
 	}
-	rndr.popbuf(BUFFER_BLOCK)
 	return i
 }
 
@@ -1803,12 +1768,11 @@ func parse_atxheader(ob *bytes.Buffer, rndr *render, data []byte) int {
 	}
 
 	if end > i {
-		work := rndr.newbuf(BUFFER_SPAN)
+		work := bytes.NewBuffer(nil)
 		parse_inline(work, rndr, data[i:end])
 		if nil != rndr.make.header {
 			rndr.make.header(ob, work.Bytes(), level, rndr.make.opaque)
 		}
-		rndr.popbuf(BUFFER_SPAN)
 	}
 
 	return skip
@@ -1965,7 +1929,7 @@ func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, col_data []int
 	columns := len(col_data)
 	i := 0
 
-	row_work := rndr.newbuf(BUFFER_SPAN)
+	row_work := bytes.NewBuffer(nil)
 
 	if i < size && data[i] == '|' {
 		i++
@@ -1973,7 +1937,7 @@ func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, col_data []int
 
 	col := 0
 	for col = 0; col < columns && i < size; col++ {
-		cell_work := rndr.newbuf(BUFFER_SPAN)
+		cell_work := bytes.NewBuffer(nil)
 		for i < size && isspace(data[i]) {
 			i++
 		}
@@ -1997,7 +1961,6 @@ func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, col_data []int
 			rndr.make.table_cell(row_work, cell_work.Bytes(), tmp, rndr.make.opaque)
 		}
 
-		rndr.popbuf(BUFFER_SPAN)
 		i++
 	}
 
@@ -2015,7 +1978,6 @@ func parse_table_row(ob *bytes.Buffer, rndr *render, data []byte, col_data []int
 	if nil != rndr.make.table_row {
 		rndr.make.table_row(ob, row_work.Bytes(), rndr.make.opaque)
 	}
-	rndr.popbuf(BUFFER_SPAN)
 }
 
 // return column_data_out as a second return arg
@@ -2110,8 +2072,8 @@ func parse_table_header(ob *bytes.Buffer, rndr *render, data []byte, column_data
 func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 	defer un(trace("parse_table"))
 	size := len(data)
-	header_work := rndr.newbuf(BUFFER_SPAN)
-	body_work := rndr.newbuf(BUFFER_BLOCK)
+	header_work := bytes.NewBuffer(nil)
+	body_work := bytes.NewBuffer(nil)
 	var col_data []int
 	i := parse_table_header(header_work, rndr, data, &col_data)
 	if i > 0 {
@@ -2139,21 +2101,20 @@ func parse_table(ob *bytes.Buffer, rndr *render, data []byte) int {
 		}
 	}
 
-	rndr.popbuf(BUFFER_SPAN)
-	rndr.popbuf(BUFFER_BLOCK)
 	return i
 }
 
 func parse_block(ob *bytes.Buffer, rndr *render, data []byte) {
 	defer un(trace("parse_block"))
-	beg := 0
 
-	if rndr.reachedNestingLimit() {
+	if rndr.nesting > rndr.max_nesting {
 		return
 	}
+	rndr.nesting++
+	defer func() { rndr.nesting-- }()
 
 	size := len(data)
-
+	beg := 0
 	for beg < size {
 		txt_data := data[beg:]
 		if is_atxheader(rndr, txt_data) {
