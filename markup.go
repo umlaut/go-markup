@@ -776,13 +776,20 @@ func char_langle_tag(ob *bytes.Buffer, rndr *render, data []byte, offset int) in
 
 func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int {
 	defer un(trace("char_autolink"))
-	var copen byte
 
-	if offset > 0 {
-		if !isspace(data[offset-1]) && !ispunct(data[offset-1]) {
-			return 0
-		}
-	}
+    // quick check to rule out most false hits on ':'
+    if len(data) < offset + 3 || data[offset+1] != '/' || data[offset+2] != '/' {
+        return 0
+    }
+
+    // scan backward for a word boundary
+    rewind := 0
+    for offset - rewind > 0 && rewind <= 7 && !isspace(data[offset-rewind-1]) && !isspace(data[offset-rewind-1]) {
+        rewind++
+    }
+    if rewind > 6 { // longest supported protocol is "mailto" which has 6 letters
+        return 0
+    }
 
 	dataorig := data
 	data = data[offset:]
@@ -802,6 +809,7 @@ func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 	}
 
 	/* See if the link finishes with a punctuation sign that can be closed. */
+	var copen byte
 	switch data[link_end-1] {
 	case '"':
 		copen = '"'
@@ -817,7 +825,7 @@ func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 
 	if copen != 0 {
 		buf_start_idx := 0
-		buf_end_idx := offset + link_end - 2
+		buf_end_idx := offset - rewind + link_end - 2
 
 		open_delim := 1
 
@@ -858,15 +866,18 @@ func char_autolink(ob *bytes.Buffer, rndr *render, data []byte, offset int) int 
 		}
 	}
 
-	work := data[:link_end]
+    // we were triggered on the ':', so we need to rewind the output a bit
+    if ob.Len() >= rewind {
+        ob.Truncate(len(ob.Bytes()) - rewind)
+    }
 
 	if rndr.make.autolink != nil {
 		var u_link bytes.Buffer
-		unscape_text(&u_link, work)
+		unscape_text(&u_link, data[:link_end])
 		rndr.make.autolink(ob, u_link.Bytes(), MKDA_NORMAL, rndr.make.opaque)
 	}
 
-	return len(work)
+	return link_end - rewind
 }
 
 /* '[': parsing a link or an image */
@@ -2366,14 +2377,8 @@ func ups_markdown_init(r *render, extensions uint) {
 	r.active_char['&'] = MD_CHAR_ENTITITY
 
 	if extensions&MKDEXT_AUTOLINK != 0 {
-		r.active_char['h'] = MD_CHAR_AUTOLINK // http, https
-		r.active_char['H'] = MD_CHAR_AUTOLINK
-
-		r.active_char['f'] = MD_CHAR_AUTOLINK // ftp
-		r.active_char['F'] = MD_CHAR_AUTOLINK
-
-		r.active_char['m'] = MD_CHAR_AUTOLINK // mailto
-		r.active_char['M'] = MD_CHAR_AUTOLINK
+		// http://, https://, ftp://, mailto://
+		r.active_char[':'] = MD_CHAR_AUTOLINK
 	}
 	r.refs = make(map[string]*LinkRef)
 
@@ -2381,13 +2386,13 @@ func ups_markdown_init(r *render, extensions uint) {
 	r.max_nesting = 16
 }
 
-func MarkdownToHtml(ib []byte, options uint) []byte {
+func MarkdownToHtml(ib []byte, options, extensions uint) []byte {
 	defer un(trace("MarkdownToHtml"))
 	init_markdown_char_ptrs()
 
 	var rndr render
 	rndr.make = upshtml_renderer(options)
-	ups_markdown_init(&rndr, 0)
+	ups_markdown_init(&rndr, extensions)
 
 	var text bytes.Buffer
 	/* first pass: looking for references, copying everything else */

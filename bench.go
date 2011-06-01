@@ -27,7 +27,7 @@ func main() {
 	for j := 0; j < ITER2; j++ {
 		start = time.Nanoseconds()
 		for i:= 0; i < ITER; i++ {
-			markup.MarkdownToHtml(d, 0)
+			markup.MarkdownToHtml(d, 0, 0)
 		}
 		end = time.Nanoseconds()
 		dur = (end - start) / 10e6
@@ -41,7 +41,7 @@ func main() {
 	for j := 0; j < ITER2; j++ {
 		start = time.Nanoseconds()
 		for i:= 0; i < ITER; i++ {
-			markup.MarkdownToHtml(d, 0xff)
+			markup.MarkdownToHtml(d, 0, 0xff)
 		}
 		end = time.Nanoseconds()
 		dur = (end - start) / 10e6

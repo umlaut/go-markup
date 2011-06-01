@@ -30,7 +30,7 @@ func pprint(s string) {
 }
 
 func testStr(s string) {
-	html := markup.MarkdownToHtml([]byte(s), 0)
+	html := markup.MarkdownToHtml([]byte(s), 0, 0)
 	pprint(s)
 	pprint(string(html))
 }
@@ -47,7 +47,7 @@ func testCrashFile(basename string) {
 		return
 	}
 	//fmt.Printf("Testing: %s\n", fn)
-	html := clean(string(markup.MarkdownToHtml(src, 0)))
+	html := clean(string(markup.MarkdownToHtml(src, 0, 0)))
 	//fmt.Printf("got %d:\n", len(html))
 	pprint(html)
 }
@@ -67,7 +67,7 @@ func testFile(basename string) bool {
 		return false
 	}
 	totalTested++
-	html := clean(string(markup.MarkdownToHtml(src, 0)))
+	html := clean(string(markup.MarkdownToHtml(src, 0, 0)))
 	htmlref := clean(string(ref))
 	if html != htmlref {
 		fmt.Printf("Fail: '%s'\n", basename)
