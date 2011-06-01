@@ -9,7 +9,7 @@
 8g -o bin\bench.8 -I bin bench.go
 @if ERRORLEVEL 1 EXIT /B 1
 
-8l -o bin\upskirtreftest.exe -L bin bin\upskirt_ref_test.8
+8l -o bin\bench.exe -L bin bin\bench.8
 @if ERRORLEVEL 1 EXIT /B 1
 
-bin\upskirtreftest.exe
+bin\bench.exe
